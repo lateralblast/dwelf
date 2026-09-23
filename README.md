@@ -6,6 +6,12 @@ A command-line scraper for Dell's support site (drivers, manuals, articles,
 videos, advisories, regulatory documents) for a given Dell product — by
 model name, a direct URL, or a service tag.
 
+## Version
+
+**0.4.0** — see `CHANGELOG.md` for the full version history. This section
+is kept in sync with `__version__` in `dwelf.py`; run `python3 dwelf.py
+--version` to confirm what you actually have installed.
+
 ```
 ❯ python3 dwelf.py --model R630
 [
@@ -33,8 +39,12 @@ confirmed along the way.
 ## Requirements
 
 ```
-pip install selenium
+pip install -r requirements.txt
 ```
+
+(The script also auto-installs any of these it finds missing at runtime,
+via `pip install`, so this step is optional — but running it up front
+avoids that happening mid-run.)
 
 You also need **Google Chrome or Chromium installed** (Selenium's built-in
 "Selenium Manager" downloads a matching chromedriver automatically):
@@ -64,15 +74,12 @@ tar xf /tmp/geckodriver.tar.gz -C /tmp && chmod +x /tmp/geckodriver
 Auto-detected if already on `PATH` (and not a snap); otherwise pass
 `--firefox-binary`/`--geckodriver-binary` explicitly.
 
-### Optional: undetected-chromedriver engine (`--engine uc`, the default)
+### `--engine uc` (undetected-chromedriver, the default)
 
-```
-pip install undetected-chromedriver
-```
-
-Patches the chromedriver binary itself to remove automation fingerprints.
-This is the **default** engine; use `--engine selenium` for plain
-Selenium/Chrome with no extra dependency.
+Already covered by `requirements.txt` above. Patches the chromedriver
+binary itself to remove automation fingerprints. This is the **default**
+engine; use `--engine selenium` for plain Selenium/Chrome with no extra
+dependency.
 
 ### Running unattended (no display)
 
@@ -218,3 +225,13 @@ Use `--geturl` to check the constructed URL before a full run, or pass
 
 See `CHANGELOG.md` for the complete, versioned history of every feature,
 bug, and thing confirmed (or ruled out) by testing along the way.
+
+## License
+
+This work is licensed under a
+[Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+(CC BY-NC-SA 4.0).
+
+You are free to share and adapt this work for non-commercial purposes,
+with attribution, as long as you distribute any adaptations under the
+same license. See the linked license for the full terms.
