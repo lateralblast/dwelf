@@ -71,39 +71,39 @@ Usage (runs with a visible Chrome window by default - see --headless below):
     One of --model, --url, or --servicetag is required - running with none
     of them prints usage and exits rather than assuming a product.
 
-    python3 dwelf.py --model R630              # type=drivers, Category=BIOS, OS=BIOS
-    python3 dwelf.py --model R730              # same, for the R730 instead
-    python3 dwelf.py --model "Dell Precision Tower 3420"   # non-PowerEdge line, its own slug rule
-    python3 dwelf.py --model "Dell Precision Compact 3260"   # same line, different form factor -> different prefix
-    python3 dwelf.py --model "Dell Optiplex 3000 Micro"   # another line, no prefix/suffix at all
-    python3 dwelf.py --model "OptiPlex 3040 Small Form Factor"   # same line, abbreviated form factor
-    python3 dwelf.py --model "Latitude 3460"   # laptop line, always gets a "-laptop" suffix
-    python3 dwelf.py --model "XPS 13 9340"    # two numbers -> laptop; one number (e.g. "XPS 8940") -> desktop
-    python3 dwelf.py --model "Inspiron 24 5410 All-in-One"   # same token-count rule as XPS, but a word can override it
-    python3 dwelf.py --model R630 --type manuals            # Manuals & Documents instead of drivers
-    python3 dwelf.py --model R630 --type articles           # KB Articles (capped at 30 for a signed-out session)
-    python3 dwelf.py --model R630 --type videos             # Videos (full list, no cap)
-    python3 dwelf.py --model R630 --type advisories         # Security advisories (Technical tab not fetched)
-    python3 dwelf.py --model R630 --type advisories --impact High   # only High-impact advisories
-    python3 dwelf.py --model R630 --type regulatory         # Regulatory compliance documents
-    python3 dwelf.py --model R630 --type manuals --search "release notes"   # only results containing this text
-    python3 dwelf.py --servicetag 1MJ4LG2      # resolve a tag instead of guessing --model (intermittent, see below)
+    python3 dwelf.py --model R630                                         # type=drivers, Category=BIOS, OS=BIOS
+    python3 dwelf.py --model R730                                         # same, for the R730 instead
+    python3 dwelf.py --model "Dell Precision Tower 3420"                  # non-PowerEdge line, its own slug rule
+    python3 dwelf.py --model "Dell Precision Compact 3260"                # same line, different form factor -> different prefix
+    python3 dwelf.py --model "Dell Optiplex 3000 Micro"                   # another line, no prefix/suffix at all
+    python3 dwelf.py --model "OptiPlex 3040 Small Form Factor"            # same line, abbreviated form factor
+    python3 dwelf.py --model "Latitude 3460"                              # laptop line, always gets a "-laptop" suffix
+    python3 dwelf.py --model "XPS 13 9340"                                # two numbers -> laptop; one number (e.g. "XPS 8940") -> desktop
+    python3 dwelf.py --model "Inspiron 24 5410 All-in-One"                # same token-count rule as XPS, but a word can override it
+    python3 dwelf.py --model R630 --type manuals                          # Manuals & Documents instead of drivers
+    python3 dwelf.py --model R630 --type articles                         # KB Articles (capped at 30 for a signed-out session)
+    python3 dwelf.py --model R630 --type videos                           # Videos (full list, no cap)
+    python3 dwelf.py --model R630 --type advisories                       # Security advisories (Technical tab not fetched)
+    python3 dwelf.py --model R630 --type advisories --impact High         # only High-impact advisories
+    python3 dwelf.py --model R630 --type regulatory                       # Regulatory compliance documents
+    python3 dwelf.py --model R630 --type manuals --search "release notes" # only results containing this text
+    python3 dwelf.py --servicetag 1MJ4LG2                                 # resolve a tag instead of guessing --model (intermittent, see below)
     python3 dwelf.py --model R630 --category Firmware --os "Windows Server 2019 LTSC"
-    python3 dwelf.py --model R630 --os none    # leave Dell's default OS selection alone
-    python3 dwelf.py --url <a product's drivers URL> --category BIOS  # instead of --model/--type
-    python3 dwelf.py --geturl --model r630 --type manuals   # just print the constructed URL and exit
-    python3 dwelf.py --debug                  # dump screenshots/HTML at each step
-    python3 dwelf.py --headless               # blocked by Dell's bot protection; kept for completeness
-    python3 dwelf.py --engine uc               # undetected-chromedriver backend instead of plain Selenium
-    python3 dwelf.py --engine firefox          # Firefox instead of Chrome - confirmed more reliable (see above)
+    python3 dwelf.py --model R630 --os none                               # leave Dell's default OS selection alone
+    python3 dwelf.py --url <a product's drivers URL> --category BIOS      # instead of --model/--type
+    python3 dwelf.py --geturl --model r630 --type manuals                 # just print the constructed URL and exit
+    python3 dwelf.py --debug                                              # dump screenshots/HTML at each step
+    python3 dwelf.py --headless                                           # blocked by Dell's bot protection; kept for completeness
+    python3 dwelf.py --engine uc                                          # undetected-chromedriver backend instead of plain Selenium
+    python3 dwelf.py --engine firefox                                     # Firefox instead of Chrome - confirmed more reliable (see above)
     python3 dwelf.py --output drivers.csv
-    python3 dwelf.py --model R630 --display text   # human-readable stdout instead of JSON (--output is unaffected)
-    python3 dwelf.py --model R630 --display table  # ASCII table (needs: pip install terminaltables)
-    python3 dwelf.py --model R630 --download           # also fetch each file into $HOME/firmware/r630
-    python3 dwelf.py --model R630 --download --directory /path/to/dir   # ...or a specific directory
-    python3 dwelf.py --chrome-binary /path/to/chrome   # if auto-detect fails
-    python3 dwelf.py --engine firefox --firefox-binary /path/to/firefox --geckodriver-binary /path/to/geckodriver
-    xvfb-run -a python3 dwelf.py              # unattended, no display available (confirmed working)
+    python3 dwelf.py --model R630 --display text                          # human-readable stdout instead of JSON (--output is unaffected)
+    python3 dwelf.py --model R630 --display table                         # ASCII table (needs: pip install terminaltables)
+    python3 dwelf.py --model R630 --download                              # also fetch each file into $HOME/firmware/r630
+    python3 dwelf.py --model R630 --download --directory /path/to/dir     # ...or a specific directory
+    python3 dwelf.py --chrome-binary /path/to/chrome                      # if auto-detect fails
+    python3 dwelf.py --engine firefox --firefox-binary /path/to/firefox --geckodriver-binary /path/to/geckodriver # if auto-detect fails
+    xvfb-run -a python3 dwelf.py                                          # unattended, no display available (confirmed working)
 """
 
 import argparse
@@ -179,10 +179,10 @@ DEFAULT_LOCALE = "en-au"
 # (precision-t3420-workstation) slugs. Each entry is a template taking
 # {locale} and {slug}.
 TYPE_URL_TEMPLATES = {
-    "drivers": "https://www.dell.com/support/product-details/{locale}/product/{slug}/drivers",
-    "manuals": "https://www.dell.com/support/product-details/{locale}/product/{slug}/resources/manuals",
-    "articles": "https://www.dell.com/support/product-details/{locale}/product/{slug}/resources/articles",
-    "videos": "https://www.dell.com/support/product-details/{locale}/product/{slug}/resources/videos",
+    "drivers":    "https://www.dell.com/support/product-details/{locale}/product/{slug}/drivers",
+    "manuals":    "https://www.dell.com/support/product-details/{locale}/product/{slug}/resources/manuals",
+    "articles":   "https://www.dell.com/support/product-details/{locale}/product/{slug}/resources/articles",
+    "videos":     "https://www.dell.com/support/product-details/{locale}/product/{slug}/resources/videos",
     "advisories": "https://www.dell.com/support/product-details/{locale}/product/{slug}/resources/advisories",
     "regulatory": "https://www.dell.com/support/product-details/{locale}/product/{slug}/resources/regulatory",
 }
@@ -379,17 +379,17 @@ def build_product_url(model: str, type_: str = DEFAULT_TYPE, locale: str = DEFAU
 #     a fixed order: [checkbox, name, importance, release date, category,
 #     action/download].
 COOKIE_BUTTON_SELECTORS = [
-    (By.ID, "onetrust-accept-btn-handler"),
+    (By.ID,    "onetrust-accept-btn-handler"),
     (By.XPATH, "//button[contains(translate(., 'ACEPT', 'acept'), 'accept')]"),
 ]
 
 CATEGORY_TRIGGER_ID = "dnd-cat-dropdown-control"
-CATEGORY_POPUP_ID = "dnd-cat-dropdown-popup"
-OS_TRIGGER_ID = "dnd-os-dropdown-control"
-OS_POPUP_ID = "dnd-os-dropdown-popup-list"
+CATEGORY_POPUP_ID   = "dnd-cat-dropdown-popup"
+OS_TRIGGER_ID       = "dnd-os-dropdown-control"
+OS_POPUP_ID         = "dnd-os-dropdown-popup-list"
 
-ROW_SELECTOR = "div[id^='table-'] div.dds__tr[data-row]"
-GRIDCELL_SELECTOR = "[role='gridcell']"
+ROW_SELECTOR        = "div[id^='table-'] div.dds__tr[data-row]"
+GRIDCELL_SELECTOR   = "[role='gridcell']"
 # Index into a row's gridcells (0 = row-selection checkbox).
 COL_NAME, COL_IMPORTANCE, COL_DATE, COL_CATEGORY, COL_ACTION = 1, 2, 3, 4, 5
 
@@ -399,7 +399,7 @@ COL_NAME, COL_IMPORTANCE, COL_DATE, COL_CATEGORY, COL_ACTION = 1, 2, 3, 4, 5
 # with a title link (a.manual-link > h5), a doc-type line (div.dds__body-2),
 # and an "Updated: <date>" line (.updated-id).
 MANUALS_CONTAINER_ID = "manualsdetails"
-MANUAL_ROW_SELECTOR = f"#{MANUALS_CONTAINER_ID} > div.dds__col--lg-12"
+MANUAL_ROW_SELECTOR  = f"#{MANUALS_CONTAINER_ID} > div.dds__col--lg-12"
 
 # The "articles" page (support/product-details/.../resources/articles) shares
 # the manuals page's general layout (same #<container> > div.dds__col--lg-12
@@ -411,7 +411,7 @@ MANUAL_ROW_SELECTOR = f"#{MANUALS_CONTAINER_ID} > div.dds__col--lg-12"
 # so this script returns that same first batch rather than pretending to
 # paginate through content that needs a Dell account to unlock.
 ARTICLES_CONTAINER_ID = "articlesisgdetails"
-ARTICLE_ROW_SELECTOR = f"#{ARTICLES_CONTAINER_ID} > div.dds__col--lg-12"
+ARTICLE_ROW_SELECTOR  = f"#{ARTICLES_CONTAINER_ID} > div.dds__col--lg-12"
 
 # The "videos" page (support/product-details/.../resources/videos) is a card
 # grid rather than a list: #videodetails contains a div.dds__row of
@@ -424,7 +424,7 @@ ARTICLE_ROW_SELECTOR = f"#{ARTICLES_CONTAINER_ID} > div.dds__col--lg-12"
 # no text, and a titled one - distinguished here by which has .text), plus
 # two div.dds__body-3 siblings in DOM order: [date, duration].
 VIDEOS_CONTAINER_ID = "videodetails"
-VIDEO_ROW_SELECTOR = f"#{VIDEOS_CONTAINER_ID} div.dds__col--lg-3"
+VIDEO_ROW_SELECTOR  = f"#{VIDEOS_CONTAINER_ID} div.dds__col--lg-3"
 
 # The "advisories" page (support/product-details/.../resources/advisories)
 # is back to a DDS grid like the drivers page, but with role="cell" (not
@@ -435,8 +435,8 @@ VIDEO_ROW_SELECTOR = f"#{VIDEOS_CONTAINER_ID} div.dds__col--lg-3"
 # followed by a same-data-row "dds__tr__expandable" detail row (collapsed,
 # empty unless expanded), which :not(.dds__tr__expandable) excludes. Column
 # order: [expand button, impact, advisory ID + link, title, last updated].
-ADVISORY_TABLE_ID = "table-adv-product"
-ADVISORY_ROW_SELECTOR = f"#{ADVISORY_TABLE_ID} div.dds__tr[data-row]:not(.dds__tr__expandable)"
+ADVISORY_TABLE_ID      = "table-adv-product"
+ADVISORY_ROW_SELECTOR  = f"#{ADVISORY_TABLE_ID} div.dds__tr[data-row]:not(.dds__tr__expandable)"
 ADVISORY_CELL_SELECTOR = "[role='cell']"
 ADV_COL_IMPACT, ADV_COL_ID, ADV_COL_TITLE, ADV_COL_UPDATED = 1, 2, 3, 4
 
@@ -489,64 +489,64 @@ REGULATORY_ROW_SELECTOR = f"#{REGULATORY_CONTAINER_ID} div.dds__col--lg-12.dds__
 # consequence of using a fixed base slug: if a tag happens to belong to
 # SERVICE_TAG_BASE_SLUG itself, there's no distinct signal to tell that
 # apart from a silent block, so that case isn't specially detected here.
-SERVICE_TAG_INPUT_ID = "homemfe-dropdown-input"
+SERVICE_TAG_INPUT_ID         = "homemfe-dropdown-input"
 SERVICE_TAG_SUBMIT_BUTTON_ID = "btnSubmit_dep"
-SERVICE_TAG_BASE_SLUG = "poweredge-r630"
-CHANGE_PRODUCT_DIALOG_ID = "changeProductContentDiv"
-SERVICE_TAG_ERROR_IDS = ["dep-msg-invalidServiceTag_dep", "dep-msg-accessDenied_dep"]
+SERVICE_TAG_BASE_SLUG        = "poweredge-r630"
+CHANGE_PRODUCT_DIALOG_ID     = "changeProductContentDiv"
+SERVICE_TAG_ERROR_IDS        = ["dep-msg-invalidServiceTag_dep", "dep-msg-accessDenied_dep"]
 
 
 @dataclass
 class DriverInfo:
     name: str
-    category: Optional[str] = None
+    category: Optional[str]     = None
     release_date: Optional[str] = None
-    importance: Optional[str] = None
+    importance: Optional[str]   = None
     download_url: Optional[str] = None
 
 
 @dataclass
 class ManualInfo:
     title: str
-    url: Optional[str] = None
+    url: Optional[str]      = None
     doc_type: Optional[str] = None
-    updated: Optional[str] = None
+    updated: Optional[str]  = None
 
 
 @dataclass
 class ArticleInfo:
     title: str
-    url: Optional[str] = None
+    url: Optional[str]         = None
     description: Optional[str] = None
-    updated: Optional[str] = None
-    article_id: Optional[str] = None
+    updated: Optional[str]     = None
+    article_id: Optional[str]  = None
 
 
 @dataclass
 class VideoInfo:
     title: str
-    url: Optional[str] = None
-    date: Optional[str] = None
-    duration: Optional[str] = None
+    url: Optional[str]           = None
+    date: Optional[str]          = None
+    duration: Optional[str]      = None
     thumbnail_url: Optional[str] = None
 
 
 @dataclass
 class AdvisoryInfo:
     title: str
-    advisory_id: Optional[str] = None
-    url: Optional[str] = None
-    impact: Optional[str] = None
+    advisory_id: Optional[str]  = None
+    url: Optional[str]          = None
+    impact: Optional[str]       = None
     last_updated: Optional[str] = None
 
 
 @dataclass
 class RegulatoryInfo:
     title: str
-    url: Optional[str] = None
-    product: Optional[str] = None
+    url: Optional[str]              = None
+    product: Optional[str]          = None
     regulatory_model: Optional[str] = None
-    regulatory_type: Optional[str] = None
+    regulatory_type: Optional[str]  = None
 
 
 def find_chrome_binary() -> Optional[str]:
@@ -1418,10 +1418,10 @@ def scrape_regulatory_page(driver, wait: WebDriverWait, debug: bool) -> List[Reg
 
 
 def build_any_driver(
-    engine: str = "uc",
+    engine: str    = "uc",
     headless: bool = False,
-    chrome_binary: Optional[str] = None,
-    firefox_binary: Optional[str] = None,
+    chrome_binary: Optional[str]      = None,
+    firefox_binary: Optional[str]     = None,
     geckodriver_binary: Optional[str] = None,
 ):
     """Dispatch to the right build_driver*() for `engine`. Shared by
@@ -1442,11 +1442,11 @@ LIST_TARGETS = {"categories", "os", "types"}
 def run_list(
     list_target: str,
     url: str,
-    locale: str = DEFAULT_LOCALE,
+    locale: str    = DEFAULT_LOCALE,
     headless: bool = False,
-    chrome_binary: Optional[str] = None,
-    engine: str = "uc",
-    firefox_binary: Optional[str] = None,
+    chrome_binary: Optional[str]      = None,
+    engine: str    = "uc",
+    firefox_binary: Optional[str]     = None,
     geckodriver_binary: Optional[str] = None,
 ) -> List[str]:
     """Return the available values for --category (list_target=
