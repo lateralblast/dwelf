@@ -8,7 +8,7 @@ model name, a direct URL, or a service tag.
 
 ## Version
 
-**0.4.0** — see `CHANGELOG.md` for the full version history. This section
+**0.4.1** — see `CHANGELOG.md` for the full version history. This section
 is kept in sync with `__version__` in `dwelf.py`; run `python3 dwelf.py
 --version` to confirm what you actually have installed.
 
@@ -122,6 +122,7 @@ python3 dwelf.py --geturl --model R630 --type manuals            # just print th
 
 # Output
 python3 dwelf.py --model R630 --output drivers.csv
+python3 dwelf.py --model R630 --display text                      # human-readable stdout instead of JSON
 python3 dwelf.py --model R630 --download                          # also fetch each file into $HOME/firmware/r630
 python3 dwelf.py --model R630 --download --directory /path/to/dir
 
@@ -148,6 +149,7 @@ xvfb-run -a python3 dwelf.py --model R630          # unattended, no display avai
 | `--impact IMPACT` | — | `Critical`/`High`/`Medium`/`Low` filter (`--type advisories` only). |
 | `--search TEXT` | — | Post-filter: keep only results containing this string in any field. |
 | `--output FILE` | stdout | Write results to `.json` or `.csv` instead of printing. |
+| `--display {json,text}` | `json` | Stdout rendering format only — `--output` always writes JSON/CSV regardless. |
 | `--download` | off | Also fetch each result's linked file into `--directory`. |
 | `--directory DIR` | `$HOME/firmware/<model>` | Destination for `--download`. |
 | `--headless` | off | Run the browser headless. **Reliably blocked by Dell** — see below. |

@@ -97,6 +97,7 @@ Usage (runs with a visible Chrome window by default - see --headless below):
     python3 dwelf.py --engine uc               # undetected-chromedriver backend instead of plain Selenium
     python3 dwelf.py --engine firefox          # Firefox instead of Chrome - confirmed more reliable (see above)
     python3 dwelf.py --output drivers.csv
+    python3 dwelf.py --model R630 --display text   # human-readable stdout instead of JSON (--output is unaffected)
     python3 dwelf.py --model R630 --download           # also fetch each file into $HOME/firmware/r630
     python3 dwelf.py --model R630 --download --directory /path/to/dir   # ...or a specific directory
     python3 dwelf.py --chrome-binary /path/to/chrome   # if auto-detect fails
@@ -120,7 +121,7 @@ import urllib.request
 from dataclasses import asdict, dataclass
 from typing import List, Optional
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 __long_name__ = "Dell Website Equipment Link Finder"
 
 
@@ -1512,10 +1513,22 @@ def filter_by_search(results: List, search: Optional[str]) -> List:
     return [r for r in results if any(needle in str(v).lower() for v in asdict(r).values() if v is not None)]
 
 
-def write_output(results: List, output: Optional[str]) -> None:
+def format_as_text(rows: List[dict]) -> str:
+    """Human-readable rendering of scraped results for --display text: one
+    block per result, "Pretty Key: value" per field (None fields omitted),
+    a blank line between results.
+    """
+    blocks = []
+    for i, row in enumerate(rows, 1):
+        lines = [f"{key.replace('_', ' ').title()}: {value}" for key, value in row.items() if value is not None]
+        blocks.append(f"[{i}]\n" + "\n".join(lines))
+    return "\n\n".join(blocks)
+
+
+def write_output(results: List, output: Optional[str], display: str = "json") -> None:
     rows = [asdict(r) for r in results]
     if not output:
-        print(json.dumps(rows, indent=2))
+        print(format_as_text(rows) if display == "text" else json.dumps(rows, indent=2))
         return
     if output.endswith(".csv"):
         with open(output, "w", newline="", encoding="utf-8") as f:
@@ -1613,6 +1626,13 @@ def main() -> None:
     parser.add_argument("--debug", action="store_true", help="Save a screenshot/HTML dump if no results are found")
     parser.add_argument("--output", help="Write results to this file (.json or .csv) instead of stdout")
     parser.add_argument(
+        "--display",
+        choices=["json", "text"],
+        default="json",
+        help="Format for stdout output (default: json). 'text' renders a human-readable block per "
+        "result instead of JSON. Only affects stdout - --output still always writes .json/.csv.",
+    )
+    parser.add_argument(
         "--download",
         action="store_true",
         help="Actually download each result's file into --directory, in addition to the usual JSON/CSV "
@@ -1701,7 +1721,7 @@ def main() -> None:
             print(f"No results contained '{args.search}'.", file=sys.stderr)
             sys.exit(1)
 
-    write_output(results, args.output)
+    write_output(results, args.output, args.display)
 
     if args.download:
         directory = args.directory or default_download_directory(args.model or args.servicetag)

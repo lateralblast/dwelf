@@ -535,6 +535,20 @@ order they actually happened, each as its own version starting at 0.0.1.
   real drivers correctly, and every prior product line's slug (including
   XPS's own token-count rule) is unchanged.
 
+## [0.4.1] - `--display` flag
+
+- Added `--display {json,text}` (default `json`, unchanged behavior) to
+  control stdout rendering only. `text` renders each result as a
+  "Pretty Key: value" block via a new `format_as_text()` (None fields
+  omitted). `--output` (writing to a `.json`/`.csv` file) is deliberately
+  unaffected by `--display` and keeps its existing behavior exactly - a
+  separate flag name was chosen specifically to avoid overloading
+  `--output`'s existing meaning (destination path).
+- Confirmed by testing: default (no `--display`) output is byte-identical
+  to before; `--display text` renders correctly; `--output file.json
+  --display text` still writes plain JSON to the file (only stdout, which
+  isn't used in that case, would have been affected).
+
 ## Also along the way
 
 - Renamed the main orchestration function from `get_drivers()` to
