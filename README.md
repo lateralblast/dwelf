@@ -8,7 +8,7 @@ model name, a direct URL, or a service tag.
 
 ## Version
 
-**0.4.3** — see `CHANGELOG.md` for the full version history. This section
+**0.4.4** — see `CHANGELOG.md` for the full version history. This section
 is kept in sync with `__version__` in `dwelf.py`; run `python3 dwelf.py
 --version` to confirm what you actually have installed.
 
@@ -51,6 +51,64 @@ Output in table format:
 | Dell Server PowerEdge BIOS R630/R730/R730XD Version 2.19.0 | BIOS     | 18 Mar 2024  | Urgent     | https://dl.dell.com/FOLDER11275682M/1/BIOS_KM6P8_LN64_2.19.0.BIN |
 +------------------------------------------------------------+----------+--------------+------------+------------------------------------------------------------------+
 ```
+
+List Operating Systems available for a model's webpage:
+
+```
+❯ python3 dwelf.py --list os --model r630
+BIOS
+Citrix XenServer 6.5
+Citrix XenServer 7.0
+Not Applicable
+Novell SuSE Linux ES 11
+Red Hat® Enterprise Linux 6
+Red Hat® Enterprise Linux 7
+Red Hat® Enterprise Linux 8
+SUSE Linux ES 12
+SuSE Linux ES 15
+VMware ESXi 5.1
+VMware ESXi 5.5
+VMware ESXi 6.0
+VMware ESXi 6.5
+VMware ESXi 6.7
+VMware ESXi 7.0
+Windows Server 2008 R2
+Windows Server 2012
+Windows Server 2012 R2
+Windows Server 2016
+Windows Server 2019 LTSC
+```
+
+List Categories available for a model's webpage:
+
+```
+❯ python3 dwelf.py --list categories --model r630
+All
+BIOS (1)
+Cache Solutions (3)
+Chipset (2)
+Device Firmware (1)
+Diagnostics (5)
+Drivers for OS Deployment (5)
+Enterprise Solutions (2)
+Fibre Channel (10)
+Identity Module (1)
+Network, Ethernet & Wireless (33)
+Power (13)
+SAS Drive (107)
+SAS Non-RAID (2)
+SAS RAID (3)
+SCSI non-RAID (1)
+Secure Systems Management (5)
+Solid State Storage (4)
+Storage (49)
+Systems Management (50)
+Tape Automation (2)
+Tape Drives (5)
+Video (1)
+iDRAC with Lifecycle controller (2)
+```
+
 
 ## Why this isn't a simple `requests`/`curl` script
 
@@ -145,6 +203,11 @@ python3 dwelf.py --url <a product's page URL> --category BIOS   # instead of --m
 python3 dwelf.py --servicetag 1MJ4LG2                            # resolve a real tag (intermittent, see below)
 python3 dwelf.py --geturl --model R630 --type manuals            # just print the constructed URL, no browser
 
+# Discovering valid values
+python3 dwelf.py --list types                                    # static list, no browser
+python3 dwelf.py --model R630 --list categories                  # live --category options from the drivers page
+python3 dwelf.py --model R630 --list os                          # live --os options from the drivers page
+
 # Output
 python3 dwelf.py --model R630 --output drivers.csv
 python3 dwelf.py --model R630 --display text                      # human-readable stdout instead of JSON
@@ -168,6 +231,7 @@ xvfb-run -a python3 dwelf.py --model R630          # unattended, no display avai
 | `--url URL` | — | A full Dell product-support URL, instead of `--model`. |
 | `--servicetag TAG` | — | Resolve a real service tag to a product instead of guessing `--model`. Intermittent — see [Known limitations](#known-limitations). |
 | `--geturl` | off | Print the constructed URL and exit — no browser, no network. Not compatible with `--servicetag`. |
+| `--list {categories,os,types}` | — | Print available values and exit instead of scraping. `types` needs no `--model`/`--url`; `categories`/`os` need one and always use that product's drivers page. |
 | `--type TYPE` | `drivers` | `drivers`, `manuals` (alias `documents`), `articles`, `videos`, `advisories`, `regulatory`. |
 | `--locale LOCALE` | `en-au` | Locale segment of the URL, e.g. `en-us`. |
 | `--category`, `--cat` | `BIOS` | Driver category filter (only applies to `--type drivers`). |

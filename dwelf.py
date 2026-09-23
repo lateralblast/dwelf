@@ -122,7 +122,7 @@ import urllib.request
 from dataclasses import asdict, dataclass
 from typing import List, Optional
 
-__version__ = "0.4.3"
+__version__ = "0.4.4"
 __long_name__ = "Dell Website Equipment Link Finder"
 
 
@@ -820,6 +820,29 @@ def close_dropdown(trigger) -> None:
         pass
 
 
+def list_dropdown_options(driver, trigger_id: str, popup_id: str, timeout: float = 10) -> List[str]:
+    """Open a Dell DDS combobox and return every option's visible label
+    text (e.g. "BIOS (1)", including the live count) without selecting
+    any of them - used by --list rather than select_dropdown_option()'s
+    find-and-click-one-option job.
+    """
+    wait = WebDriverWait(driver, timeout)
+    trigger = wait.until(EC.element_to_be_clickable((By.ID, trigger_id)))
+    trigger.click()
+    option_spans = wait.until(
+        EC.presence_of_all_elements_located(
+            (
+                By.XPATH,
+                f"//*[@id='{popup_id}']//button[contains(@class,'dds__dropdown__item-option')]"
+                "//span[contains(@class,'dds__dropdown__item-label')]",
+            )
+        )
+    )
+    labels = [span.text.strip() for span in option_spans if span.text.strip()]
+    close_dropdown(trigger)
+    return labels
+
+
 def select_category(driver, category: str, timeout: float = 10) -> bool:
     return select_dropdown_option(driver, CATEGORY_TRIGGER_ID, CATEGORY_POPUP_ID, category, timeout)
 
@@ -1394,6 +1417,66 @@ def scrape_regulatory_page(driver, wait: WebDriverWait, debug: bool) -> List[Reg
     return scrape_regulatory(rows)
 
 
+def build_any_driver(
+    engine: str = "uc",
+    headless: bool = False,
+    chrome_binary: Optional[str] = None,
+    firefox_binary: Optional[str] = None,
+    geckodriver_binary: Optional[str] = None,
+):
+    """Dispatch to the right build_driver*() for `engine`. Shared by
+    run_scrape() and --list, so both respect --engine/--headless/binary
+    overrides identically.
+    """
+    if engine == "uc":
+        return build_driver_uc(headless=headless, chrome_binary=chrome_binary)
+    elif engine == "firefox":
+        return build_driver_firefox(headless=headless, firefox_binary=firefox_binary, geckodriver_binary=geckodriver_binary)
+    else:
+        return build_driver(headless=headless, chrome_binary=chrome_binary)
+
+
+LIST_TARGETS = {"categories", "os", "types"}
+
+
+def run_list(
+    list_target: str,
+    url: str,
+    locale: str = DEFAULT_LOCALE,
+    headless: bool = False,
+    chrome_binary: Optional[str] = None,
+    engine: str = "uc",
+    firefox_binary: Optional[str] = None,
+    geckodriver_binary: Optional[str] = None,
+) -> List[str]:
+    """Return the available values for --category (list_target=
+    "categories"), --os ("os"), or --type ("types") - the last one is a
+    static list needing no browser at all; the other two open the
+    corresponding dropdown on the drivers page for `url`'s product and
+    read every option's label, live counts included where Dell shows them.
+    """
+    if list_target == "types":
+        return sorted(set(TYPE_URL_TEMPLATES) | set(TYPE_ALIASES))
+
+    driver = build_any_driver(engine, headless, chrome_binary, firefox_binary, geckodriver_binary)
+    try:
+        progress(f"Opening {url}")
+        driver.get(url)
+        dismiss_cookie_banner(driver, WebDriverWait(driver, 8))
+        wait = WebDriverWait(driver, 15)
+        try:
+            wait.until(EC.presence_of_element_located((By.ID, CATEGORY_TRIGGER_ID)))
+        except TimeoutException:
+            progress("Timed out waiting for the driver list widget (continuing anyway)")
+
+        if list_target == "categories":
+            return list_dropdown_options(driver, CATEGORY_TRIGGER_ID, CATEGORY_POPUP_ID)
+        else:
+            return list_dropdown_options(driver, OS_TRIGGER_ID, OS_POPUP_ID)
+    finally:
+        driver.quit()
+
+
 def run_scrape(
     url: str,
     category: str,
@@ -1409,14 +1492,7 @@ def run_scrape(
     firefox_binary: Optional[str] = None,
     geckodriver_binary: Optional[str] = None,
 ) -> List:
-    if engine == "uc":
-        driver = build_driver_uc(headless=headless, chrome_binary=chrome_binary)
-    elif engine == "firefox":
-        driver = build_driver_firefox(
-            headless=headless, firefox_binary=firefox_binary, geckodriver_binary=geckodriver_binary
-        )
-    else:
-        driver = build_driver(headless=headless, chrome_binary=chrome_binary)
+    driver = build_any_driver(engine, headless, chrome_binary, firefox_binary, geckodriver_binary)
     wait = WebDriverWait(driver, 15)
     try:
         if service_tag:
@@ -1617,6 +1693,15 @@ def main() -> None:
         "requires actually querying Dell.",
     )
     parser.add_argument(
+        "--list",
+        dest="list_target",
+        choices=sorted(LIST_TARGETS),
+        help="List available values instead of scraping results, then exit. 'types' needs no "
+        "--model/--url/--servicetag (it's a static list); 'categories' and 'os' need --model or "
+        "--url and open that product's drivers page (regardless of --type) to read the live "
+        "dropdown options.",
+    )
+    parser.add_argument(
         "--servicetag",
         help="Look up this service tag on Dell's support home page (Identify a product) and use the "
         "resulting product for --type/--category/etc., instead of guessing a slug from --model. "
@@ -1705,6 +1790,11 @@ def main() -> None:
     args = parser.parse_args()
     global _DEBUG_ENABLED
     _DEBUG_ENABLED = args.debug
+
+    if args.list_target == "types":
+        print("\n".join(run_list("types", url="")))
+        sys.exit(0)
+
     if not args.model and not args.url and not args.servicetag:
         parser.print_usage(sys.stderr)
         print(f"{parser.prog}: error: one of --model, --url, or --servicetag is required", file=sys.stderr)
@@ -1725,6 +1815,31 @@ def main() -> None:
             )
             sys.exit(1)
         print(url)
+        sys.exit(0)
+
+    if args.list_target:
+        # Category/OS dropdowns only exist on the drivers page, regardless of
+        # whatever --type was passed - so force it here rather than reusing
+        # args.page_type.
+        list_url = args.url or (build_product_url(args.model, "drivers", args.locale) if args.model else "")
+        if not list_url:
+            print(
+                "Error: --list categories/os needs --model or --url; --servicetag can't be resolved "
+                "to a URL without actually querying Dell.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        labels = run_list(
+            args.list_target,
+            list_url,
+            locale=args.locale,
+            headless=args.headless,
+            chrome_binary=args.chrome_binary,
+            engine=args.engine,
+            firefox_binary=args.firefox_binary,
+            geckodriver_binary=args.geckodriver_binary,
+        )
+        print("\n".join(labels))
         sys.exit(0)
 
     try:

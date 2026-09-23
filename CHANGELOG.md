@@ -582,6 +582,31 @@ order they actually happened, each as its own version starting at 0.0.1.
 - Added `terminaltables` to `requirements.txt` under its own "--display
   table" section, matching the file's existing per-feature grouping.
 
+## [0.4.4] - `--list` flag
+
+- Added `--list {categories,os,types}` to print available values instead
+  of scraping results, then exit. `--list types` is a static list (no
+  browser, works with no `--model`/`--url`/`--servicetag` at all);
+  `--list categories`/`--list os` need `--model` or `--url` and open that
+  product's **drivers** page specifically (forcing `drivers` regardless of
+  whatever `--type` was passed, since those dropdowns only exist there) to
+  read every live dropdown option, including Dell's live per-option counts
+  (e.g. `SAS Drive (107)`).
+- Added `list_dropdown_options()`, which opens a Dell DDS combobox and
+  collects every option's label text without selecting any of them -
+  distinct from the existing `select_dropdown_option()`, which finds and
+  clicks exactly one.
+- Extracted the `--engine` selection branch out of `run_scrape()` into a
+  new shared `build_any_driver()`, used by both `run_scrape()` and the new
+  `run_list()`, so `--list` respects `--engine`/`--headless`/binary
+  overrides identically to a normal scrape.
+- Confirmed by testing end-to-end against the real R630 drivers page:
+  `--list categories` returned all 24 real Category options with live
+  counts, `--list os` returned all 21 real OS options, and `--list types`
+  returned the static type list with no browser launched. Confirmed no
+  regression in `--geturl` (still short-circuits before `--list` is
+  considered) or a normal `--model R630` scrape.
+
 ## Also along the way
 
 - Renamed the main orchestration function from `get_drivers()` to
