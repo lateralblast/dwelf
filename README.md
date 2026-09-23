@@ -8,11 +8,13 @@ model name, a direct URL, or a service tag.
 
 ## Version
 
-**0.4.2** — see `CHANGELOG.md` for the full version history. This section
+**0.4.3** — see `CHANGELOG.md` for the full version history. This section
 is kept in sync with `__version__` in `dwelf.py`; run `python3 dwelf.py
 --version` to confirm what you actually have installed.
 
 ## Example Usage
+
+Ouput in JSON (default):
 
 ```
 ❯ python3 dwelf.py --model R630
@@ -25,6 +27,29 @@ is kept in sync with `__version__` in `dwelf.py`; run `python3 dwelf.py
     "download_url": "https://dl.dell.com/FOLDER11275682M/1/BIOS_KM6P8_LN64_2.19.0.BIN"
   }
 ]
+```
+
+Output in text format:
+
+```
+❯ python3 dwelf.py --model R630 --display text
+[1]
+Name: Dell Server PowerEdge BIOS R630/R730/R730XD Version 2.19.0
+Category: BIOS
+Release Date: 18 Mar 2024
+Importance: Urgent
+Download Url: https://dl.dell.com/FOLDER11275682M/1/BIOS_KM6P8_LN64_2.19.0.BIN
+```
+
+Output in table format:
+
+```
+❯ python3 dwelf.py --model R630 --display table
++------------------------------------------------------------+----------+--------------+------------+------------------------------------------------------------------+
+| Name                                                       | Category | Release Date | Importance | Download Url                                                     |
++------------------------------------------------------------+----------+--------------+------------+------------------------------------------------------------------+
+| Dell Server PowerEdge BIOS R630/R730/R730XD Version 2.19.0 | BIOS     | 18 Mar 2024  | Urgent     | https://dl.dell.com/FOLDER11275682M/1/BIOS_KM6P8_LN64_2.19.0.BIN |
++------------------------------------------------------------+----------+--------------+------------+------------------------------------------------------------------+
 ```
 
 ## Why this isn't a simple `requests`/`curl` script
@@ -123,6 +148,7 @@ python3 dwelf.py --geturl --model R630 --type manuals            # just print th
 # Output
 python3 dwelf.py --model R630 --output drivers.csv
 python3 dwelf.py --model R630 --display text                      # human-readable stdout instead of JSON
+python3 dwelf.py --model R630 --display table                     # ASCII table (needs: pip install terminaltables)
 python3 dwelf.py --model R630 --download                          # also fetch each file into $HOME/firmware/r630
 python3 dwelf.py --model R630 --download --directory /path/to/dir
 
@@ -149,7 +175,7 @@ xvfb-run -a python3 dwelf.py --model R630          # unattended, no display avai
 | `--impact IMPACT` | — | `Critical`/`High`/`Medium`/`Low` filter (`--type advisories` only). |
 | `--search TEXT` | — | Post-filter: keep only results containing this string in any field. |
 | `--output FILE` | stdout | Write results to `.json` or `.csv` instead of printing. |
-| `--display {json,text}` | `json` | Stdout rendering format only — `--output` always writes JSON/CSV regardless. |
+| `--display {json,text,table}` | `json` | Stdout rendering format only — `--output` always writes JSON/CSV regardless. `table` needs `terminaltables`. |
 | `--download` | off | Also fetch each result's linked file into `--directory`. |
 | `--directory DIR` | `$HOME/firmware/<model>` | Destination for `--download`. |
 | `--headless` | off | Run the browser headless. **Reliably blocked by Dell** — see below. |

@@ -568,6 +568,20 @@ order they actually happened, each as its own version starting at 0.0.1.
   notices), which only route through `progress()` too - they're silent
   unless `--debug` is passed.
 
+## [0.4.3] - `--display table`
+
+- Added `table` as a third `--display` option, via a new
+  `format_as_table()` using the `terminaltables` package (auto-installed
+  on demand via `ensure_package()`, same as every other optional
+  dependency in this script). Column headers come from the first result's
+  field names, `None` values render as an empty cell.
+- Confirmed by testing end-to-end for both a single-row (`--type drivers`)
+  and a 22-row (`--type manuals`) result set: renders correctly in both
+  cases, and `terminaltables` was confirmed to actually get auto-installed
+  rather than assumed already present.
+- Added `terminaltables` to `requirements.txt` under its own "--display
+  table" section, matching the file's existing per-feature grouping.
+
 ## Also along the way
 
 - Renamed the main orchestration function from `get_drivers()` to

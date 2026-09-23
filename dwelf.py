@@ -98,6 +98,7 @@ Usage (runs with a visible Chrome window by default - see --headless below):
     python3 dwelf.py --engine firefox          # Firefox instead of Chrome - confirmed more reliable (see above)
     python3 dwelf.py --output drivers.csv
     python3 dwelf.py --model R630 --display text   # human-readable stdout instead of JSON (--output is unaffected)
+    python3 dwelf.py --model R630 --display table  # ASCII table (needs: pip install terminaltables)
     python3 dwelf.py --model R630 --download           # also fetch each file into $HOME/firmware/r630
     python3 dwelf.py --model R630 --download --directory /path/to/dir   # ...or a specific directory
     python3 dwelf.py --chrome-binary /path/to/chrome   # if auto-detect fails
@@ -121,7 +122,7 @@ import urllib.request
 from dataclasses import asdict, dataclass
 from typing import List, Optional
 
-__version__ = "0.4.2"
+__version__ = "0.4.3"
 __long_name__ = "Dell Website Equipment Link Finder"
 
 
@@ -1534,10 +1535,32 @@ def format_as_text(rows: List[dict]) -> str:
     return "\n\n".join(blocks)
 
 
+def format_as_table(rows: List[dict]) -> str:
+    """Table rendering for --display table, via the `terminaltables`
+    package (auto-installed on demand like other optional dependencies).
+    Column headers come from the first result's field names - fine since
+    a single run's results are all the same dataclass type (DriverInfo,
+    ManualInfo, ...), just not necessarily the same fields across types.
+    """
+    if not rows:
+        return ""
+    ensure_package("terminaltables")
+    from terminaltables import AsciiTable
+
+    headers = [key.replace("_", " ").title() for key in rows[0].keys()]
+    table_data = [headers] + [["" if v is None else str(v) for v in row.values()] for row in rows]
+    return AsciiTable(table_data).table
+
+
 def write_output(results: List, output: Optional[str], display: str = "json") -> None:
     rows = [asdict(r) for r in results]
     if not output:
-        print(format_as_text(rows) if display == "text" else json.dumps(rows, indent=2))
+        if display == "text":
+            print(format_as_text(rows))
+        elif display == "table":
+            print(format_as_table(rows))
+        else:
+            print(json.dumps(rows, indent=2))
         return
     if output.endswith(".csv"):
         with open(output, "w", newline="", encoding="utf-8") as f:
@@ -1641,10 +1664,11 @@ def main() -> None:
     parser.add_argument("--output", help="Write results to this file (.json or .csv) instead of stdout")
     parser.add_argument(
         "--display",
-        choices=["json", "text"],
+        choices=["json", "text", "table"],
         default="json",
         help="Format for stdout output (default: json). 'text' renders a human-readable block per "
-        "result instead of JSON. Only affects stdout - --output still always writes .json/.csv.",
+        "result; 'table' renders an ASCII table (requires: pip install terminaltables). Only "
+        "affects stdout - --output still always writes .json/.csv.",
     )
     parser.add_argument(
         "--download",
