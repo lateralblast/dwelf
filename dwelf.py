@@ -121,7 +121,7 @@ import urllib.request
 from dataclasses import asdict, dataclass
 from typing import List, Optional
 
-__version__ = "0.4.1"
+__version__ = "0.4.2"
 __long_name__ = "Dell Website Equipment Link Finder"
 
 
@@ -1243,8 +1243,17 @@ def save_debug_artifacts(driver, prefix: str) -> None:
         print(f"[debug] could not save artifacts for {prefix}: {e}", file=sys.stderr)
 
 
+_DEBUG_ENABLED = False
+
+
 def progress(msg: str) -> None:
-    print(f"[+] {msg}", file=sys.stderr, flush=True)
+    """Verbose step-by-step status line. Off by default - only prints when
+    --debug is given (main() sets _DEBUG_ENABLED from args.debug). Errors,
+    warnings, and final results all use plain print() elsewhere in this
+    script instead of progress(), so they're never affected by this.
+    """
+    if _DEBUG_ENABLED:
+        print(f"[+] {msg}", file=sys.stderr, flush=True)
 
 
 def scrape_drivers_page(driver, wait: WebDriverWait, category: str, os_filter: Optional[str], debug: bool) -> List[DriverInfo]:
@@ -1623,7 +1632,12 @@ def main() -> None:
         "on top of whatever --type/--category/--os/--impact filtering already narrowed it to. "
         "If not set, all scraped results are returned.",
     )
-    parser.add_argument("--debug", action="store_true", help="Save a screenshot/HTML dump if no results are found")
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Show verbose [+] step-by-step progress on stderr (off by default) and save a numbered "
+        "screenshot/HTML dump at each stage.",
+    )
     parser.add_argument("--output", help="Write results to this file (.json or .csv) instead of stdout")
     parser.add_argument(
         "--display",
@@ -1665,6 +1679,8 @@ def main() -> None:
         "non-snap Firefox + geckodriver (see --firefox-binary).",
     )
     args = parser.parse_args()
+    global _DEBUG_ENABLED
+    _DEBUG_ENABLED = args.debug
     if not args.model and not args.url and not args.servicetag:
         parser.print_usage(sys.stderr)
         print(f"{parser.prog}: error: one of --model, --url, or --servicetag is required", file=sys.stderr)

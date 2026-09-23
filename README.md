@@ -8,7 +8,7 @@ model name, a direct URL, or a service tag.
 
 ## Version
 
-**0.4.1** — see `CHANGELOG.md` for the full version history. This section
+**0.4.2** — see `CHANGELOG.md` for the full version history. This section
 is kept in sync with `__version__` in `dwelf.py`; run `python3 dwelf.py
 --version` to confirm what you actually have installed.
 
@@ -155,7 +155,7 @@ xvfb-run -a python3 dwelf.py --model R630          # unattended, no display avai
 | `--headless` | off | Run the browser headless. **Reliably blocked by Dell** — see below. |
 | `--engine {uc,selenium,firefox}` | `uc` | Browser automation backend. |
 | `--chrome-binary`, `--firefox-binary`, `--geckodriver-binary` | auto-detect | Explicit binary paths if auto-detection fails. |
-| `--debug` | off | Save numbered screenshot/HTML dumps at each stage. |
+| `--debug` | off | Show verbose `[+]` progress on stderr and save numbered screenshot/HTML dumps at each stage. |
 | `--version` | — | Print the script name, full name, and version. |
 
 Run `python3 dwelf.py --help` for the complete, up-to-date text.
@@ -221,9 +221,11 @@ Use `--geturl` to check the constructed URL before a full run, or pass
 - **No DISPLAY found**: run under `xvfb-run -a` (see
   [Running unattended](#running-unattended-no-display)), or pass
   `--headless` (not recommended — reliably blocked by Dell).
-- **`--debug`** is your friend for anything else: it dumps a numbered
-  screenshot + HTML file at every stage, so you can see exactly what the
-  browser saw.
+- **`--debug`** is your friend for anything else: it shows verbose `[+]`
+  step-by-step progress and dumps a numbered screenshot + HTML file at
+  every stage, so you can see exactly what the browser saw. Normal runs
+  are quiet by default (just the result output) — this is what turns the
+  chatter back on.
 
 ## Full change history
 

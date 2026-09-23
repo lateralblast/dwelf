@@ -549,6 +549,25 @@ order they actually happened, each as its own version starting at 0.0.1.
   --display text` still writes plain JSON to the file (only stdout, which
   isn't used in that case, would have been affected).
 
+## [0.4.2] - Quiet by default
+
+- The verbose `[+] ...` step-by-step progress lines (`progress()`, 44 call
+  sites) now only print when `--debug` is given, via a module-level
+  `_DEBUG_ENABLED` flag set from `args.debug` at the top of `main()`.
+  Default output is now just the result JSON/text, with none of the
+  step-by-step chatter. Errors, warnings ("No results found", etc.), and
+  "Wrote N result(s) to FILE" all use plain `print()` elsewhere in the
+  script rather than `progress()`, so none of those are affected.
+- Updated `--debug`'s help text, which previously undersold it as just
+  saving screenshots/HTML - it now also gates the verbose progress output.
+- Confirmed by testing: default output for `--model R630` is now just the
+  JSON result with no `[+]` lines at all; `--debug` restores the full
+  verbose trace and the numbered screenshot/HTML dumps exactly as before.
+- Worth knowing: this also quiets some warnings that aren't purely
+  cosmetic (e.g. `--download`'s "Skipping/Failed to download" per-file
+  notices), which only route through `progress()` too - they're silent
+  unless `--debug` is passed.
+
 ## Also along the way
 
 - Renamed the main orchestration function from `get_drivers()` to
