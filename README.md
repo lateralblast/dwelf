@@ -12,6 +12,8 @@ model name, a direct URL, or a service tag.
 is kept in sync with `__version__` in `dwelf.py`; run `python3 dwelf.py
 --version` to confirm what you actually have installed.
 
+## Example Usage
+
 ```
 ❯ python3 dwelf.py --model R630
 [
