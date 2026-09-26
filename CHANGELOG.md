@@ -607,6 +607,23 @@ order they actually happened, each as its own version starting at 0.0.1.
   regression in `--geturl` (still short-circuits before `--list` is
   considered) or a normal `--model R630` scrape.
 
+## [0.4.5] - `--checkconfig` flag
+
+- Added `--checkconfig` to report whether each package in
+  `requirements.txt` (`selenium`, `undetected-chromedriver`, `setuptools`,
+  `terminaltables`) is importable and which version is installed, then
+  exit - no `--model`/`--url`/`--servicetag` needed, and no browser or
+  network activity. Exits `0` if `selenium` (the only always-required
+  package) is present, `1` otherwise; a missing optional package is
+  reported but doesn't fail the check, since `ensure_package()` still
+  auto-installs it the first time `--engine uc` or `--display table`
+  actually needs it.
+- New `check_requirements()` deliberately doesn't call `ensure_package()`
+  itself (which would install anything missing) - it uses
+  `importlib.util.find_spec()` to check presence and
+  `importlib.metadata.version()` to read the installed version, so
+  `--checkconfig` is a read-only diagnostic.
+
 ## Also along the way
 
 - Renamed the main orchestration function from `get_drivers()` to

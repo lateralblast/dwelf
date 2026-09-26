@@ -92,6 +92,7 @@ Usage (runs with a visible Chrome window by default - see --headless below):
     python3 dwelf.py --model R630 --os none                               # leave Dell's default OS selection alone
     python3 dwelf.py --url <a product's drivers URL> --category BIOS      # instead of --model/--type
     python3 dwelf.py --geturl --model r630 --type manuals                 # just print the constructed URL and exit
+    python3 dwelf.py --checkconfig                                        # check requirements.txt packages, then exit
     python3 dwelf.py --debug                                              # dump screenshots/HTML at each step
     python3 dwelf.py --headless                                           # blocked by Dell's bot protection; kept for completeness
     python3 dwelf.py --engine uc                                          # undetected-chromedriver backend instead of plain Selenium
@@ -109,6 +110,8 @@ Usage (runs with a visible Chrome window by default - see --headless below):
 import argparse
 import csv
 import importlib
+import importlib.metadata
+import importlib.util
 import json
 import os
 import re
@@ -122,7 +125,7 @@ import urllib.request
 from dataclasses import asdict, dataclass
 from typing import List, Optional
 
-__version__ = "0.4.4"
+__version__ = "0.4.5"
 __long_name__ = "Dell Website Equipment Link Finder"
 
 
@@ -142,6 +145,53 @@ def ensure_package(import_name: str, pip_name: Optional[str] = None) -> None:
         raise RuntimeError(f"Failed to auto-install '{pip_name}' with pip: {e}") from e
 
     importlib.import_module(import_name)  # re-raises ImportError if still missing
+
+
+# Mirrors requirements.txt: (import name, pip package name, always required,
+# what it's needed for). Used by --checkconfig to report what's installed
+# without installing anything itself, unlike ensure_package() above, which
+# every other call site in this script uses to install on demand.
+CONFIG_REQUIREMENTS = [
+    ("selenium", "selenium", True, "core, always required"),
+    ("undetected_chromedriver", "undetected-chromedriver", False, "default browser engine, --engine uc"),
+    ("setuptools", "setuptools", False, "undetected-chromedriver's distutils shim on Python 3.12+"),
+    ("terminaltables", "terminaltables", False, "--display table"),
+]
+
+
+def check_requirements() -> bool:
+    """Print whether each package in requirements.txt is importable, and
+    its installed version, without installing anything. Returns True if
+    every always-required package is present; a missing optional package
+    is reported but doesn't fail the check, since ensure_package() installs
+    it on demand the first time it's actually needed (--engine uc or
+    --display table).
+    """
+    all_required_present = True
+    for import_name, pip_name, required, purpose in CONFIG_REQUIREMENTS:
+        found = importlib.util.find_spec(import_name) is not None
+        if found:
+            try:
+                detail = importlib.metadata.version(pip_name)
+            except importlib.metadata.PackageNotFoundError:
+                detail = "installed, version unknown"
+        else:
+            detail = "not installed"
+            if required:
+                all_required_present = False
+        status = "OK" if found else "MISSING"
+        need = "required" if required else "optional"
+        print(f"[{status:7}] {pip_name:26} {need:8} {detail:26} {purpose}")
+
+    print()
+    if all_required_present:
+        print(
+            "All required packages are installed. Any optional package reported missing "
+            "above will be auto-installed the first time it's actually needed."
+        )
+    else:
+        print("Missing required package(s) above - install with: pip install -r requirements.txt")
+    return all_required_present
 
 
 ensure_package("selenium")
@@ -1655,6 +1705,13 @@ def main() -> None:
         "--version", action="version", version=f"%(prog)s ({__long_name__}) {__version__}"
     )
     parser.add_argument(
+        "--checkconfig",
+        action="store_true",
+        help="Check whether each package in requirements.txt is installed (without installing "
+        "anything) and exit - no --model/--url/--servicetag needed. Exits 0 if every "
+        "always-required package is present, 1 otherwise.",
+    )
+    parser.add_argument(
         "--model",
         default=None,
         help="Dell model to build the drivers URL for, e.g. R730. No default - one of "
@@ -1790,6 +1847,9 @@ def main() -> None:
     args = parser.parse_args()
     global _DEBUG_ENABLED
     _DEBUG_ENABLED = args.debug
+
+    if args.checkconfig:
+        sys.exit(0 if check_requirements() else 1)
 
     if args.list_target == "types":
         print("\n".join(run_list("types", url="")))

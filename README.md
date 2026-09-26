@@ -8,7 +8,7 @@ model name, a direct URL, or a service tag.
 
 ## Version
 
-**0.4.4**, see `CHANGELOG.md` for the full version history. This section
+**0.4.5**, see `CHANGELOG.md` for the full version history. This section
 is kept in sync with `__version__` in `dwelf.py`; run `python3 dwelf.py
 --version` to confirm what you actually have installed.
 
@@ -208,6 +208,9 @@ python3 dwelf.py --list types                                    # static list, 
 python3 dwelf.py --model R630 --list categories                  # live --category options from the drivers page
 python3 dwelf.py --model R630 --list os                          # live --os options from the drivers page
 
+# Checking your environment
+python3 dwelf.py --checkconfig                                   # is each requirements.txt package installed?
+
 # Output
 python3 dwelf.py --model R630 --output drivers.csv
 python3 dwelf.py --model R630 --display text                      # human-readable stdout instead of JSON
@@ -231,6 +234,7 @@ xvfb-run -a python3 dwelf.py --model R630          # unattended, no display avai
 | `--url URL` | - | A full Dell product-support URL, instead of `--model`. |
 | `--servicetag TAG` | - | Resolve a real service tag to a product instead of guessing `--model`. Intermittent, see [Known limitations](#known-limitations). |
 | `--geturl` | off | Print the constructed URL and exit. No browser, no network. Not compatible with `--servicetag`. |
+| `--checkconfig` | off | Report whether each `requirements.txt` package is installed and exit. No `--model`/`--url`/`--servicetag`, no browser, no network. |
 | `--list {categories,os,types}` | - | Print available values and exit instead of scraping. `types` needs no `--model`/`--url`; `categories`/`os` need one and always use that product's drivers page. |
 | `--type TYPE` | `drivers` | `drivers`, `manuals` (alias `documents`), `articles`, `videos`, `advisories`, `regulatory`. |
 | `--locale LOCALE` | `en-au` | Locale segment of the URL, e.g. `en-us`. |
