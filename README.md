@@ -8,7 +8,7 @@ model name, a direct URL, or a service tag.
 
 ## Version
 
-**0.4.5**, see `CHANGELOG.md` for the full version history. This section
+**0.4.6**, see `CHANGELOG.md` for the full version history. This section
 is kept in sync with `__version__` in `dwelf.py`; run `python3 dwelf.py
 --version` to confirm what you actually have installed.
 
@@ -219,7 +219,8 @@ python3 dwelf.py --model R630 --download                          # also fetch e
 python3 dwelf.py --model R630 --download --directory /path/to/dir
 
 # Browser engine / troubleshooting
-python3 dwelf.py --model R630 --debug              # dump screenshots/HTML at each step
+python3 dwelf.py --model R630 --verbose            # step-by-step progress on stderr, no dumps
+python3 dwelf.py --model R630 --debug              # progress plus screenshots/HTML dumped at each step
 python3 dwelf.py --model R630 --engine selenium    # plain Selenium instead of the uc default
 python3 dwelf.py --model R630 --engine firefox     # Firefox instead of Chrome
 python3 dwelf.py --model R630 --chrome-binary /path/to/chrome
@@ -249,7 +250,8 @@ xvfb-run -a python3 dwelf.py --model R630          # unattended, no display avai
 | `--headless` | off | Run the browser headless. **Reliably blocked by Dell**, see below. |
 | `--engine {uc,selenium,firefox}` | `uc` | Browser automation backend. |
 | `--chrome-binary`, `--firefox-binary`, `--geckodriver-binary` | auto-detect | Explicit binary paths if auto-detection fails. |
-| `--debug` | off | Show verbose `[+]` progress on stderr and save numbered screenshot/HTML dumps at each stage. |
+| `--verbose` | off | Show `[+]` step-by-step progress on stderr as each stage runs. |
+| `--debug` | off | Everything `--verbose` shows, plus numbered screenshot/HTML dumps saved at each stage. |
 | `--version` | - | Print the script name, full name, and version. |
 
 Run `python3 dwelf.py --help` for the complete, up-to-date text.
@@ -315,8 +317,9 @@ Use `--geturl` to check the constructed URL before a full run, or pass
 - **No DISPLAY found**: run under `xvfb-run -a` (see
   [Running unattended](#running-unattended-no-display)), or pass
   `--headless` (not recommended, reliably blocked by Dell).
-- **`--debug`** is your friend for anything else: it shows verbose `[+]`
-  step-by-step progress and dumps a numbered screenshot + HTML file at
+- **`--debug`** (or plain `--verbose` for just the progress lines, no
+  dumps) is your friend for anything else: it shows step-by-step `[+]`
+  progress and, for `--debug`, dumps a numbered screenshot + HTML file at
   every stage, so you can see exactly what the browser saw. Normal runs
   are quiet by default (just the result output). This is what turns the
   chatter back on.

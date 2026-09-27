@@ -93,7 +93,8 @@ Usage (runs with a visible Chrome window by default - see --headless below):
     python3 dwelf.py --url <a product's drivers URL> --category BIOS      # instead of --model/--type
     python3 dwelf.py --geturl --model r630 --type manuals                 # just print the constructed URL and exit
     python3 dwelf.py --checkconfig                                        # check requirements.txt packages, then exit
-    python3 dwelf.py --debug                                              # dump screenshots/HTML at each step
+    python3 dwelf.py --verbose                                            # step-by-step progress on stderr, no dumps
+    python3 dwelf.py --debug                                              # progress plus screenshots/HTML dumped at each step
     python3 dwelf.py --headless                                           # blocked by Dell's bot protection; kept for completeness
     python3 dwelf.py --engine uc                                          # undetected-chromedriver backend instead of plain Selenium
     python3 dwelf.py --engine firefox                                     # Firefox instead of Chrome - confirmed more reliable (see above)
@@ -125,7 +126,7 @@ import urllib.request
 from dataclasses import asdict, dataclass
 from typing import List, Optional
 
-__version__ = "0.4.5"
+__version__ = "0.4.6"
 __long_name__ = "Dell Website Equipment Link Finder"
 
 
@@ -1317,16 +1318,17 @@ def save_debug_artifacts(driver, prefix: str) -> None:
         print(f"[debug] could not save artifacts for {prefix}: {e}", file=sys.stderr)
 
 
-_DEBUG_ENABLED = False
+_VERBOSE_ENABLED = False
 
 
 def progress(msg: str) -> None:
     """Verbose step-by-step status line. Off by default - only prints when
-    --debug is given (main() sets _DEBUG_ENABLED from args.debug). Errors,
+    --verbose or --debug is given (main() sets _VERBOSE_ENABLED from
+    args.verbose or args.debug; --debug always implies --verbose). Errors,
     warnings, and final results all use plain print() elsewhere in this
     script instead of progress(), so they're never affected by this.
     """
-    if _DEBUG_ENABLED:
+    if _VERBOSE_ENABLED:
         print(f"[+] {msg}", file=sys.stderr, flush=True)
 
 
@@ -1798,10 +1800,16 @@ def main() -> None:
         "If not set, all scraped results are returned.",
     )
     parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show [+] step-by-step progress on stderr as each stage runs (opening the page, "
+        "dismissing the cookie banner, selecting filters, scraping results, ...). Off by default. "
+        "--debug implies --verbose.",
+    )
+    parser.add_argument(
         "--debug",
         action="store_true",
-        help="Show verbose [+] step-by-step progress on stderr (off by default) and save a numbered "
-        "screenshot/HTML dump at each stage.",
+        help="Everything --verbose shows, plus a numbered screenshot/HTML dump saved at each stage.",
     )
     parser.add_argument("--output", help="Write results to this file (.json or .csv) instead of stdout")
     parser.add_argument(
@@ -1845,8 +1853,8 @@ def main() -> None:
         "non-snap Firefox + geckodriver (see --firefox-binary).",
     )
     args = parser.parse_args()
-    global _DEBUG_ENABLED
-    _DEBUG_ENABLED = args.debug
+    global _VERBOSE_ENABLED
+    _VERBOSE_ENABLED = args.verbose or args.debug
 
     if args.checkconfig:
         sys.exit(0 if check_requirements() else 1)

@@ -624,6 +624,17 @@ order they actually happened, each as its own version starting at 0.0.1.
   `importlib.metadata.version()` to read the installed version, so
   `--checkconfig` is a read-only diagnostic.
 
+## [0.4.6] - `--verbose` flag
+
+- Added `--verbose` to show the same `[+]` step-by-step progress lines
+  `--debug` already printed, but without `--debug`'s screenshot/HTML
+  dumps at each stage. `--debug` still implies `--verbose`.
+- Decoupled `progress()`'s gate from `--debug` specifically: it's now
+  driven by a renamed `_VERBOSE_ENABLED` global, set from
+  `args.verbose or args.debug` in `main()`. The `debug` parameter threaded
+  through `run_scrape()`/`scrape_*_page()` for `save_debug_artifacts()`
+  calls is unchanged and still tied only to `--debug`.
+
 ## Also along the way
 
 - Renamed the main orchestration function from `get_drivers()` to
