@@ -773,6 +773,34 @@ order they actually happened, each as its own version starting at 0.0.1.
   2-second wait was added before the resubmit to make hitting it less
   likely in the first place.
 
+## [0.5.0] - `--specs` renders a cached/downloaded CSV as a table
+
+- `--specs` now reads a `.csv` result (cached or freshly downloaded) with
+  new `read_csv_rows()` and prints it via the existing `format_as_table()`
+  (the same rendering `--display table` uses), instead of only ever
+  printing the file's path. A non-`.csv` result, or a `.csv` with no data
+  rows, still falls back to printing the path, unchanged from 0.4.9.
+- `read_csv_rows()` opens with `encoding="utf-8-sig"`, not plain `utf-8`:
+  confirmed by testing against a real downloaded specifications CSV
+  (from a user) that Dell's export includes a UTF-8 BOM, which corrupted
+  the first column's header (`"﻿Component"` instead of `"Component"`)
+  before this fix.
+
+## [0.5.1] - `normalize_label()` preserves case
+
+- `normalize_label()` (the shared path-component normalizer behind the
+  on-disk cache directory, `--specs`'s `<servicetag>/specs.<ext>`, and
+  `default_download_directory()`'s `$HOME/firmware/<model>`) no longer
+  lowercases its input, only collapsing whitespace/hyphens. A service tag
+  like `1MJ4LG2` and a model like `R630` now keep their original case
+  everywhere on disk, matching how Dell itself displays them, instead of
+  being written as `1mj4lg2`/`r630`. Existing lowercase cache directories
+  on this machine (`~/.dwelf/cache/1mj4lg2` - empty, removed;
+  `~/.dwelf/cache/r630` -> `R630`; `~/firmware/r830` -> `R830`) were
+  migrated by hand to match. The lowercase URL-slug rule `--model` itself
+  uses to build a Dell URL (a separate function) is unrelated and
+  unchanged, since Dell's own URLs require lowercase.
+
 ## Also along the way
 
 - Renamed the main orchestration function from `get_drivers()` to

@@ -8,7 +8,7 @@ model name, a direct URL, or a service tag.
 
 ## Version
 
-**0.4.9**, see `CHANGELOG.md` for the full version history. This section
+**0.5.1**, see `CHANGELOG.md` for the full version history. This section
 is kept in sync with `__version__` in `dwelf.py`; run `python3 dwelf.py
 --version` to confirm what you actually have installed.
 
@@ -239,7 +239,7 @@ xvfb-run -a python3 dwelf.py --model R630          # unattended, no display avai
 A successful scrape (`--model` or `--servicetag` only; `--url` alone has
 no label to cache under) is written to `$HOME/.dwelf/cache/<model-or-
 servicetag>/<type>__<filters>__<locale>.json`, e.g.
-`~/.dwelf/cache/r630/drivers__cat-bios__os-bios__en-au.json`. A later run
+`~/.dwelf/cache/R630/drivers__cat-bios__os-bios__en-au.json`. A later run
 with the same `--model`/`--servicetag`, `--type`, `--category`/`--os`
 (`--type drivers` only) or `--impact` (`--type advisories` only), and
 `--locale` reuses that file instead of scraping again, needing no browser
@@ -256,7 +256,7 @@ just delete the relevant file (or the whole `~/.dwelf/cache` directory)
 to force a fresh scrape next time.
 
 `--specs` uses the same directory and the same `--servicetag` label, e.g.
-`~/.dwelf/cache/1mj4lg2/specs.pdf`, following the same `--no-cache`/
+`~/.dwelf/cache/1MJ4LG2/specs.pdf`, following the same `--no-cache`/
 `--cache-dir` rules above.
 
 ## Flag reference
@@ -266,7 +266,7 @@ to force a fresh scrape next time.
 | `--model MODEL` | - | Dell model name, e.g. `R730`, `"Dell Precision Tower 3420"`. See [Supported product lines](#supported-product-lines-for---model). |
 | `--url URL` | - | A full Dell product-support URL, instead of `--model`. |
 | `--servicetag TAG` | - | Resolve a real service tag to a product instead of guessing `--model`. Intermittent, see [Known limitations](#known-limitations). |
-| `--specs` | off | Export `--servicetag`'s Product Specifications and cache it instead of scraping `--type`. Requires `--servicetag`. See [Caching](#caching) and [Known limitations](#known-limitations). |
+| `--specs` | off | Export `--servicetag`'s Product Specifications and cache it instead of scraping `--type`. Prints a `.csv` result as a table; otherwise prints its path. Requires `--servicetag`. See [Caching](#caching) and [Known limitations](#known-limitations). |
 | `--geturl` | off | Print the constructed URL and exit. No browser, no network. Not compatible with `--servicetag`. |
 | `--checkconfig` | off | Report whether each `requirements.txt` package is installed and exit. No `--model`/`--url`/`--servicetag`, no browser, no network. |
 | `--list {categories,os,types}` | - | Print available values and exit instead of scraping. `types` needs no `--model`/`--url`; `categories`/`os` need one and always use that product's drivers page. |

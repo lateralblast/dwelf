@@ -130,7 +130,7 @@ import urllib.request
 from dataclasses import asdict, dataclass
 from typing import List, Optional
 
-__version__ = "0.4.9"
+__version__ = "0.5.1"
 __long_name__ = "Dell Website Equipment Link Finder"
 
 
@@ -1859,12 +1859,14 @@ def run_list(
 
 def normalize_label(label: Optional[str], fallback: str = "product") -> str:
     """Turn a model name, service tag, or locale into a filesystem-safe
-    path component: lowercase, whitespace/hyphens collapsed to a single
-    "-". Shared by default_download_directory() and the on-disk cache
-    (see cache_file_path()) so a given --model/--servicetag always maps to
-    the same directory in both places.
+    path component: original case preserved (a service tag like
+    "1MJ4LG2" stays uppercase, matching how Dell itself displays it),
+    whitespace/hyphens collapsed to a single "-". Shared by
+    default_download_directory() and the on-disk cache (see
+    cache_file_path()) so a given --model/--servicetag always maps to the
+    same directory in both places.
     """
-    return re.sub(r"[\s/\\-]+", "-", (label or "").strip().lower()).strip("-") or fallback
+    return re.sub(r"[\s/\\-]+", "-", (label or "").strip()).strip("-") or fallback
 
 
 DEFAULT_CACHE_DIR = os.path.join(os.path.expanduser("~"), ".dwelf", "cache")
@@ -2028,10 +2030,10 @@ def run_scrape(
 
 
 def default_download_directory(model_label: Optional[str]) -> str:
-    """$HOME/firmware/<model_label>, normalized the same way --model
-    normalizes a model name for a URL slug (lowercase, whitespace/hyphens
-    collapsed) but without the "poweredge-" prefix assumption, since this
-    is a local folder name, not a Dell URL.
+    """$HOME/firmware/<model_label>, normalized via normalize_label()
+    (original case preserved, whitespace/hyphens collapsed) rather than
+    the lowercase URL-slug rule --model uses to build a Dell URL, since
+    this is a local folder name, not a Dell URL.
     """
     return os.path.join(os.path.expanduser("~"), "firmware", normalize_label(model_label))
 
@@ -2116,6 +2118,21 @@ def format_as_table(rows: List[dict]) -> str:
     headers = [key.replace("_", " ").title() for key in rows[0].keys()]
     table_data = [headers] + [["" if v is None else str(v) for v in row.values()] for row in rows]
     return AsciiTable(table_data).table
+
+
+def read_csv_rows(path: str) -> List[dict]:
+    """Read a CSV file into a list of {column: value} dicts, in row order,
+    column names taken as-is from its header row. Used by --specs to
+    render a cached/downloaded specifications export with
+    format_as_table() - no dataclass or --type-specific structure
+    involved, since a CSV's columns are whatever Dell's export contains.
+    utf-8-sig (not plain utf-8) strips a leading BOM if present - Dell's
+    own specifications export was confirmed to include one, which
+    otherwise corrupts the first column's header (e.g. "﻿Component"
+    instead of "Component").
+    """
+    with open(path, newline="", encoding="utf-8-sig") as f:
+        return list(csv.DictReader(f))
 
 
 def write_output(results: List, output: Optional[str], display: str = "json") -> None:
@@ -2213,10 +2230,10 @@ def main() -> None:
         help="Export a resolved service tag's Product Specifications instead of scraping --type: "
         "resolves --servicetag, clicks 'Product Specifications' on its overview page, then clicks "
         "through to export it, saving the downloaded file to --cache-dir (default: "
-        f"{DEFAULT_CACHE_DIR}) as <servicetag>/specs.<ext> and printing its path. Requires "
-        "--servicetag (not --model/--url), since that link only appears once a tag has actually been "
-        "resolved. A cached file from an earlier run is reused with no live site access at all, "
-        "unless --no-cache is given.",
+        f"{DEFAULT_CACHE_DIR}) as <servicetag>/specs.<ext>. If it's a .csv, its rows are printed as a "
+        "table (like --display table); otherwise its path is printed. Requires --servicetag (not "
+        "--model/--url), since that link only appears once a tag has actually been resolved. A cached "
+        "file from an earlier run is reused with no live site access at all, unless --no-cache is given.",
     )
     parser.add_argument(
         "--category", "--cat", dest="category", default="BIOS", help="Driver category to filter on (default: BIOS)"
@@ -2352,7 +2369,11 @@ def main() -> None:
         except RuntimeError as e:
             print(f"Error: {e}", file=sys.stderr)
             sys.exit(1)
-        print(path)
+        rows = read_csv_rows(path) if path.endswith(".csv") else []
+        if rows:
+            print(format_as_table(rows))
+        else:
+            print(path)
         sys.exit(0)
 
     os_filter = None if args.os_filter.lower() == "none" else args.os_filter
