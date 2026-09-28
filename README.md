@@ -8,7 +8,7 @@ model name, a direct URL, or a service tag.
 
 ## Version
 
-**0.4.7**, see `CHANGELOG.md` for the full version history. This section
+**0.4.8**, see `CHANGELOG.md` for the full version history. This section
 is kept in sync with `__version__` in `dwelf.py`; run `python3 dwelf.py
 --version` to confirm what you actually have installed.
 
@@ -211,6 +211,12 @@ python3 dwelf.py --model R630 --list os                          # live --os opt
 # Checking your environment
 python3 dwelf.py --checkconfig                                   # is each requirements.txt package installed?
 
+# Caching
+python3 dwelf.py --model R630                                    # a successful scrape is cached automatically
+python3 dwelf.py --model R630                                    # this run reuses it - no browser, no network
+python3 dwelf.py --model R630 --no-cache                         # ignore any cache; don't write one either
+python3 dwelf.py --model R630 --cache-dir /path/to/dir
+
 # Output
 python3 dwelf.py --model R630 --output drivers.csv
 python3 dwelf.py --model R630 --display text                      # human-readable stdout instead of JSON
@@ -226,6 +232,27 @@ python3 dwelf.py --model R630 --engine firefox     # Firefox instead of Chrome
 python3 dwelf.py --model R630 --chrome-binary /path/to/chrome
 xvfb-run -a python3 dwelf.py --model R630          # unattended, no display available
 ```
+
+## Caching
+
+A successful scrape (`--model` or `--servicetag` only; `--url` alone has
+no label to cache under) is written to `$HOME/.dwelf/cache/<model-or-
+servicetag>/<type>__<filters>__<locale>.json`, e.g.
+`~/.dwelf/cache/r630/drivers__cat-bios__os-bios__en-au.json`. A later run
+with the same `--model`/`--servicetag`, `--type`, `--category`/`--os`
+(`--type drivers` only) or `--impact` (`--type advisories` only), and
+`--locale` reuses that file instead of scraping again, needing no browser
+or network access at all, which also means one less request for Dell's
+Akamai bot protection to potentially block. A scrape that comes back
+empty is never cached, since a blocked or never-rendered page also comes
+back empty, and caching that would permanently hide the real problem
+behind a false "nothing matched".
+
+There's no automatic expiry or invalidation: once written, a cache file
+is reused indefinitely. Pass `--no-cache` to always scrape live and skip
+writing a new cache file, `--cache-dir` to use a different location, or
+just delete the relevant file (or the whole `~/.dwelf/cache` directory)
+to force a fresh scrape next time.
 
 ## Flag reference
 
@@ -247,6 +274,8 @@ xvfb-run -a python3 dwelf.py --model R630          # unattended, no display avai
 | `--display {json,text,table}` | `json` | Stdout rendering format only. `--output` always writes JSON/CSV regardless. `table` needs `terminaltables`. |
 | `--download` | off | Also fetch each result's linked file into `--directory`. |
 | `--directory DIR` | `$HOME/firmware/<model>` | Destination for `--download`. |
+| `--no-cache` | off | Always scrape live; don't read or write a cache file. See [Caching](#caching). |
+| `--cache-dir DIR` | `$HOME/.dwelf/cache` | Where cached results are stored, in a subdirectory per `--model`/`--servicetag`. |
 | `--headless` | off | Run the browser headless. **Reliably blocked by Dell**, see below. |
 | `--engine {uc,selenium,firefox}` | `uc` | Browser automation backend. |
 | `--chrome-binary`, `--firefox-binary`, `--geckodriver-binary` | auto-detect | Explicit binary paths if auto-detection fails. |

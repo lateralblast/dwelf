@@ -98,6 +98,8 @@ Usage (runs with a visible Chrome window by default - see --headless below):
     python3 dwelf.py --headless                                           # blocked by Dell's bot protection; kept for completeness
     python3 dwelf.py --engine uc                                          # undetected-chromedriver backend instead of plain Selenium
     python3 dwelf.py --engine firefox                                     # Firefox instead of Chrome - confirmed more reliable (see above)
+    python3 dwelf.py --model R630 --no-cache                              # always scrape live; don't read/write a cache file
+    python3 dwelf.py --model R630 --cache-dir /path/to/dir                # cache location (default: $HOME/.dwelf/cache)
     python3 dwelf.py --output drivers.csv
     python3 dwelf.py --model R630 --display text                          # human-readable stdout instead of JSON (--output is unaffected)
     python3 dwelf.py --model R630 --display table                         # ASCII table (needs: pip install terminaltables)
@@ -126,7 +128,7 @@ import urllib.request
 from dataclasses import asdict, dataclass
 from typing import List, Optional
 
-__version__ = "0.4.7"
+__version__ = "0.4.8"
 __long_name__ = "Dell Website Equipment Link Finder"
 
 
@@ -1598,6 +1600,91 @@ def run_list(
         driver.quit()
 
 
+def normalize_label(label: Optional[str], fallback: str = "product") -> str:
+    """Turn a model name, service tag, or locale into a filesystem-safe
+    path component: lowercase, whitespace/hyphens collapsed to a single
+    "-". Shared by default_download_directory() and the on-disk cache
+    (see cache_file_path()) so a given --model/--servicetag always maps to
+    the same directory in both places.
+    """
+    return re.sub(r"[\s/\\-]+", "-", (label or "").strip().lower()).strip("-") or fallback
+
+
+DEFAULT_CACHE_DIR = os.path.join(os.path.expanduser("~"), ".dwelf", "cache")
+
+# Only the scrapable types have a result dataclass to reconstruct cached
+# rows into - see SCRAPABLE_TYPES's comment. An unscrapable --type (no
+# entry here) is simply never cached, in run_scrape().
+RESULT_DATACLASSES = {
+    "drivers": DriverInfo,
+    "manuals": ManualInfo,
+    "articles": ArticleInfo,
+    "videos": VideoInfo,
+    "advisories": AdvisoryInfo,
+    "regulatory": RegulatoryInfo,
+}
+
+
+def cache_file_path(
+    cache_dir: str,
+    label: str,
+    page_type: str,
+    locale: str,
+    category: Optional[str] = None,
+    os_filter: Optional[str] = None,
+    impact: Optional[str] = None,
+) -> str:
+    """<cache_dir>/<model-or-servicetag>/<page_type>[__cat-...][__os-...]
+    [__impact-...]__<locale>.json. Category/OS only vary the filename for
+    --type drivers (the only type they filter) and impact only for
+    --type advisories, matching SCRAPABLE_TYPES's filtering rules, so two
+    different filters on the same product/type land in different cache
+    files instead of colliding.
+    """
+    parts = [page_type]
+    if page_type == "drivers":
+        parts.append(f"cat-{normalize_label(category, 'any')}")
+        parts.append(f"os-{normalize_label(os_filter, 'none')}")
+    elif page_type == "advisories":
+        parts.append(f"impact-{normalize_label(impact, 'all')}")
+    parts.append(normalize_label(locale, DEFAULT_LOCALE))
+    return os.path.join(cache_dir, normalize_label(label), "__".join(parts) + ".json")
+
+
+def load_cached_results(cache_path: str, page_type: str) -> Optional[List]:
+    """Return cached results for `cache_path` as the dataclass type
+    RESULT_DATACLASSES maps `page_type` to, or None if there's no cache
+    file, it can't be parsed, or `page_type` isn't cacheable. Never
+    raises - a corrupt or unreadable cache file is treated the same as no
+    cache at all, since this is a speed/blocking-avoidance optimization,
+    never a reason a scrape should fail.
+    """
+    cls = RESULT_DATACLASSES.get(page_type)
+    if not cls:
+        return None
+    try:
+        with open(cache_path, "r", encoding="utf-8") as f:
+            rows = json.load(f)
+        return [cls(**row) for row in rows]
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def save_cached_results(cache_path: str, results: List) -> None:
+    """Write `results` to `cache_path` as JSON, creating its directory if
+    needed. Best-effort: a write failure (e.g. a read-only $HOME) is
+    reported via progress() and otherwise ignored, since caching is an
+    optimization, not a requirement for a scrape to succeed.
+    """
+    try:
+        os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+        with open(cache_path, "w", encoding="utf-8") as f:
+            json.dump([asdict(r) for r in results], f, indent=2)
+        progress(f"Cached {len(results)} result(s) to {cache_path}")
+    except OSError as e:
+        progress(f"Could not write cache file '{cache_path}': {e}")
+
+
 def run_scrape(
     url: str,
     category: str,
@@ -1612,7 +1699,23 @@ def run_scrape(
     locale: str = DEFAULT_LOCALE,
     firefox_binary: Optional[str] = None,
     geckodriver_binary: Optional[str] = None,
+    model: Optional[str] = None,
+    cache_dir: Optional[str] = None,
+    use_cache: bool = True,
 ) -> List:
+    # The cache is keyed by the raw --model/--servicetag string (whichever
+    # was actually given), not the resolved slug, so a cache hit skips
+    # service tag resolution entirely - the most Akamai-blocked step. A
+    # --url-only invocation has no such label, so it's never cached.
+    cache_label = model or service_tag
+    cache_path = None
+    if use_cache and cache_label and page_type in RESULT_DATACLASSES:
+        cache_path = cache_file_path(cache_dir or DEFAULT_CACHE_DIR, cache_label, page_type, locale, category, os_filter, impact)
+        cached = load_cached_results(cache_path, page_type)
+        if cached is not None:
+            progress(f"Using cached results from {cache_path} (--no-cache to bypass)")
+            return cached
+
     driver = build_any_driver(engine, headless, chrome_binary, firefox_binary, geckodriver_binary)
     wait = WebDriverWait(driver, 15)
     try:
@@ -1632,17 +1735,17 @@ def run_scrape(
             save_debug_artifacts(driver, "dell_debug_02_after_cookie")
 
         if page_type == "drivers":
-            return scrape_drivers_page(driver, wait, category, os_filter, debug)
+            results = scrape_drivers_page(driver, wait, category, os_filter, debug)
         elif page_type == "manuals":
-            return scrape_manuals_page(driver, wait, debug)
+            results = scrape_manuals_page(driver, wait, debug)
         elif page_type == "articles":
-            return scrape_articles_page(driver, wait, debug)
+            results = scrape_articles_page(driver, wait, debug)
         elif page_type == "videos":
-            return scrape_videos_page(driver, wait, debug)
+            results = scrape_videos_page(driver, wait, debug)
         elif page_type == "advisories":
-            return scrape_advisories_page(driver, wait, debug, impact)
+            results = scrape_advisories_page(driver, wait, debug, impact)
         elif page_type == "regulatory":
-            return scrape_regulatory_page(driver, wait, debug)
+            results = scrape_regulatory_page(driver, wait, debug)
         else:
             progress(
                 f"--type {page_type!r} has no filtering/scraping support yet; "
@@ -1653,9 +1756,18 @@ def run_scrape(
             if debug:
                 time.sleep(2)  # let any client-side rendering settle before the dump
                 save_debug_artifacts(driver, "dell_debug_03_content")
-            return []
+            results = []
     finally:
         driver.quit()
+
+    # Only a non-empty result is cached: a blocked or never-rendered page
+    # also comes back as an empty list here (each scrape_*_page() swallows
+    # its own TimeoutException - see e.g. scrape_drivers_page()), and
+    # caching that would silently pin a transient block in place as if it
+    # were a legitimate "nothing matched" answer.
+    if cache_path and results:
+        save_cached_results(cache_path, results)
+    return results
 
 
 def default_download_directory(model_label: Optional[str]) -> str:
@@ -1664,8 +1776,7 @@ def default_download_directory(model_label: Optional[str]) -> str:
     collapsed) but without the "poweredge-" prefix assumption, since this
     is a local folder name, not a Dell URL.
     """
-    label = re.sub(r"[\s/\\-]+", "-", (model_label or "product").strip().lower()).strip("-") or "product"
-    return os.path.join(os.path.expanduser("~"), "firmware", label)
+    return os.path.join(os.path.expanduser("~"), "firmware", normalize_label(model_label))
 
 
 def download_file(url: str, directory: str) -> str:
@@ -1903,6 +2014,21 @@ def main() -> None:
         help="Directory to download files into when --download is given (default: "
         "$HOME/firmware/<model>, where <model> is --model or --servicetag, normalized).",
     )
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="Always scrape live instead of using a cached result, and don't write a new one. By "
+        "default, a successful scrape (--model or --servicetag only, not --url) is cached to "
+        "--cache-dir and reused on a later identical --type/--category/--os/--impact/--locale run - "
+        "this also means a cache hit needs no browser or network access, which is one less request "
+        "for Dell's Akamai bot protection to potentially block.",
+    )
+    parser.add_argument(
+        "--cache-dir",
+        default=None,
+        help=f"Directory cached results are stored under, in a subdirectory per --model/--servicetag "
+        f"(default: {DEFAULT_CACHE_DIR}). Ignored with --no-cache.",
+    )
     parser.add_argument("--chrome-binary", help="Path to a Chrome/Chromium binary, if auto-detection fails")
     parser.add_argument(
         "--firefox-binary",
@@ -1995,6 +2121,9 @@ def main() -> None:
             locale=args.locale,
             firefox_binary=args.firefox_binary,
             geckodriver_binary=args.geckodriver_binary,
+            model=args.model,
+            cache_dir=args.cache_dir,
+            use_cache=not args.no_cache,
         )
     except RuntimeError as e:
         print(f"Error: {e}", file=sys.stderr)

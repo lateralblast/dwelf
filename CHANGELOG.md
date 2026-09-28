@@ -670,6 +670,38 @@ order they actually happened, each as its own version starting at 0.0.1.
   from `SERVICE_TAG_BASE_SLUG`), but treat it as unconfirmed until a
   future run actually exercises it.
 
+## [0.4.8] - On-disk result cache
+
+- Added a cache for scrape results: a successful (non-empty) scrape for
+  `--model`/`--servicetag` (not `--url` alone, which has no label to
+  cache under) is written as JSON to `--cache-dir` (default
+  `$HOME/.dwelf/cache`) under a subdirectory for that `--model`/
+  `--servicetag`, normalized the same way `--download`'s default
+  `--directory` already is. A later run with the same product, `--type`,
+  `--category`/`--os` (`--type drivers`), `--impact` (`--type
+  advisories`), and `--locale` reuses the cached file - confirmed by
+  testing (`--model R630`) to need no browser launch at all on a cache
+  hit (0.4s vs. a full live scrape) - which also means one less real
+  request for Akamai to potentially block. `--no-cache` always scrapes
+  live and skips writing a new cache file.
+- A scrape that comes back with zero results is deliberately never
+  cached: `scrape_*_page()` already swallows its own `TimeoutException`
+  and returns an empty list either way (see e.g. `scrape_drivers_page()`
+  above `select_os()`), so a blocked or never-rendered page is
+  indistinguishable from a real "nothing matched" from the result alone -
+  caching either would risk permanently hiding a transient block behind a
+  false empty answer.
+- Extracted `normalize_label()` out of `default_download_directory()`
+  (unchanged behavior) so the cache's per-product directory name and
+  `--download`'s default directory name are normalized identically -
+  confirmed by testing that `cache_file_path()` produces distinct,
+  filesystem-safe paths for a plain model number, a real service tag, and
+  a multi-word descriptive model name.
+- New `--type`/`--category`/`--os`/`--impact`/`--locale` combinations
+  cache to separate files by design (`cache_file_path()`), so switching
+  filters on the same product never reads stale results from a different
+  filter by mistake.
+
 ## Also along the way
 
 - Renamed the main orchestration function from `get_drivers()` to
