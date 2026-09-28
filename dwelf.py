@@ -88,6 +88,7 @@ Usage (runs with a visible Chrome window by default - see --headless below):
     python3 dwelf.py --model R630 --type regulatory                       # Regulatory compliance documents
     python3 dwelf.py --model R630 --type manuals --search "release notes" # only results containing this text
     python3 dwelf.py --servicetag 1MJ4LG2                                 # resolve a tag instead of guessing --model (intermittent, see below)
+    python3 dwelf.py --servicetag 1MJ4LG2 --specs                        # export and cache that tag's Product Specifications (needs --servicetag)
     python3 dwelf.py --model R630 --category Firmware --os "Windows Server 2019 LTSC"
     python3 dwelf.py --model R630 --os none                               # leave Dell's default OS selection alone
     python3 dwelf.py --url <a product's drivers URL> --category BIOS      # instead of --model/--type
@@ -112,6 +113,7 @@ Usage (runs with a visible Chrome window by default - see --headless below):
 
 import argparse
 import csv
+import glob
 import importlib
 import importlib.metadata
 import importlib.util
@@ -128,7 +130,7 @@ import urllib.request
 from dataclasses import asdict, dataclass
 from typing import List, Optional
 
-__version__ = "0.4.8"
+__version__ = "0.4.9"
 __long_name__ = "Dell Website Equipment Link Finder"
 
 
@@ -200,7 +202,7 @@ def check_requirements() -> bool:
 ensure_package("selenium")
 
 from selenium import webdriver
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.common.exceptions import ElementClickInterceptedException, NoSuchElementException, TimeoutException
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -638,7 +640,9 @@ def check_display_available(headless: bool) -> None:
     )
 
 
-def build_driver(headless: bool = False, chrome_binary: Optional[str] = None) -> webdriver.Chrome:
+def build_driver(
+    headless: bool = False, chrome_binary: Optional[str] = None, download_dir: Optional[str] = None
+) -> webdriver.Chrome:
     check_display_available(headless)
     binary = chrome_binary or find_chrome_binary()
     if not binary:
@@ -661,17 +665,31 @@ def build_driver(headless: bool = False, chrome_binary: Optional[str] = None) ->
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option("useAutomationExtension", False)
+    if download_dir:
+        # Used by --specs to save a file straight to disk instead of
+        # prompting or opening it inline (e.g. a PDF in Chrome's viewer).
+        options.add_experimental_option(
+            "prefs",
+            {
+                "download.default_directory": download_dir,
+                "download.prompt_for_download": False,
+                "download.directory_upgrade": True,
+                "plugins.always_open_pdf_externally": True,
+            },
+        )
 
     driver = webdriver.Chrome(options=options)
     driver.execute_cdp_cmd(
         "Page.addScriptToEvaluateOnNewDocument",
         {"source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"},
     )
+    if download_dir:
+        driver.execute_cdp_cmd("Page.setDownloadBehavior", {"behavior": "allow", "downloadPath": download_dir})
     driver.set_page_load_timeout(60)
     return driver
 
 
-def build_driver_uc(headless: bool = False, chrome_binary: Optional[str] = None):
+def build_driver_uc(headless: bool = False, chrome_binary: Optional[str] = None, download_dir: Optional[str] = None):
     """Default backend (--engine uc): undetected-chromedriver, which patches
     the chromedriver binary itself (e.g. removes the "cdc_" markers
     Selenium's chromedriver injects) rather than just setting Selenium
@@ -699,8 +717,20 @@ def build_driver_uc(headless: bool = False, chrome_binary: Optional[str] = None)
     options = uc.ChromeOptions()
     options.add_argument("--window-size=1920,1080")
     options.add_argument("--lang=en-AU")
+    if download_dir:
+        options.add_experimental_option(
+            "prefs",
+            {
+                "download.default_directory": download_dir,
+                "download.prompt_for_download": False,
+                "download.directory_upgrade": True,
+                "plugins.always_open_pdf_externally": True,
+            },
+        )
 
     driver = uc.Chrome(options=options, browser_executable_path=binary, headless=headless, use_subprocess=True)
+    if download_dir:
+        driver.execute_cdp_cmd("Page.setDownloadBehavior", {"behavior": "allow", "downloadPath": download_dir})
     driver.set_page_load_timeout(60)
     return driver
 
@@ -763,6 +793,7 @@ def build_driver_firefox(
     headless: bool = False,
     firefox_binary: Optional[str] = None,
     geckodriver_binary: Optional[str] = None,
+    download_dir: Optional[str] = None,
 ) -> webdriver.Firefox:
     """Alternative backend using Firefox instead of Chrome. Opt in with
     --engine firefox. Confirmed by testing: Dell's Akamai protection let a
@@ -802,6 +833,16 @@ def build_driver_firefox(
     options.set_preference("intl.accept_languages", "en-AU")
     # Reduce the automation fingerprints Akamai's bot detection checks for.
     options.set_preference("dom.webdriver.enabled", False)
+    if download_dir:
+        options.set_preference("browser.download.folderList", 2)
+        options.set_preference("browser.download.dir", download_dir)
+        options.set_preference("browser.download.useDownloadDir", True)
+        options.set_preference("pdfjs.disabled", True)  # force a download instead of Firefox's inline PDF viewer
+        options.set_preference(
+            "browser.helperApps.neverAsk.saveToDisk",
+            "application/pdf,application/octet-stream,application/zip,application/vnd.ms-excel,"
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv",
+        )
 
     driver = webdriver.Firefox(options=options, service=FirefoxService(executable_path=driver_path))
     driver.set_window_size(1920, 1080)
@@ -1130,11 +1171,17 @@ def resolve_service_tag_slug(
                 challenged = True
                 if debug:
                     save_debug_artifacts(driver, f"dell_debug_servicetag_attempt{attempt}_after_challenge")
-                # the challenge likely swallowed the original search request;
-                # resubmit it once the interstitial is gone.
+                # The challenge likely swallowed the original search request;
+                # resubmit it once the interstitial is gone. A short wait
+                # first, since a click right after Proceed can still land on
+                # the challenge iframe mid-teardown - confirmed by testing,
+                # raising ElementClickInterceptedException (now also caught
+                # here, alongside NoSuchElementException, so this resubmit
+                # stays best-effort instead of crashing the whole script).
+                time.sleep(2)
                 try:
                     submit_tag()
-                except NoSuchElementException:
+                except (NoSuchElementException, ElementClickInterceptedException):
                     pass
 
         if debug:
@@ -1154,6 +1201,156 @@ def resolve_service_tag_slug(
         "which otherwise gets through on pages Chrome can't). Try again, or look the tag up yourself "
         f"once at {base_url} and pass the resulting model name to --model instead."
     )
+
+
+# "Product Specifications" only appears in a resolved service tag's
+# overview page Quick Links panel - confirmed by testing that neither the
+# plain, not-yet-identified overview page (SERVICE_TAG_BASE_SLUG itself)
+# nor a --model overview page for a *different* product shows it, only a
+# tag that's actually been resolved via the "Identify a product" widget
+# does. This is why --specs requires --servicetag rather than --model.
+PRODUCT_SPECIFICATIONS_LINK_TEXT = "Product Specifications"
+
+# The specs page's own export control - NOT yet confirmed by live
+# testing: every further --servicetag resolution attempt in the same
+# session --specs was written in got silently blocked by Dell's Akamai
+# bot protection before reaching this page (see CHANGELOG), so
+# click_link_by_text() tries each of these plausible texts in order
+# rather than assuming one is right.
+SPECS_EXPORT_LINK_TEXTS = ["Export PDF", "Export as PDF", "Export"]
+
+
+def click_link_by_text(driver, texts: List[str], timeout: float = 10) -> Optional[str]:
+    """Click the first visible, clickable link/button whose text matches
+    any of `texts` (tried in order; PARTIAL_LINK_TEXT for an <a> tag
+    first, then a text-normalizing XPath fallback for a <button> or
+    anything else), and return the text that matched, or None if none of
+    them appeared within `timeout`. Used by run_specs() for "Product
+    Specifications" and the specs page's export control.
+    """
+    for text in texts:
+        try:
+            el = WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((By.PARTIAL_LINK_TEXT, text)))
+            el.click()
+            return text
+        except TimeoutException:
+            pass
+        try:
+            xpath = f'//*[self::a or self::button][contains(normalize-space(.), "{text}")]'
+            el = WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((By.XPATH, xpath)))
+            el.click()
+            return text
+        except TimeoutException:
+            continue
+    return None
+
+
+def wait_for_download(directory: str, before: set, timeout: float = 90) -> Optional[str]:
+    """Poll `directory` until a file that wasn't in `before` (its listing
+    right before the download was triggered) appears and is no longer a
+    partial download (Chrome: .crdownload, Firefox: .part; a stray .tmp is
+    treated the same way for safety), or timeout. Returns the finished
+    file's full path, or None on timeout.
+    """
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        current = set(os.listdir(directory)) if os.path.isdir(directory) else set()
+        finished = [f for f in current - before if not f.endswith((".crdownload", ".part", ".tmp"))]
+        if finished:
+            return os.path.join(directory, finished[0])
+        time.sleep(0.5)
+    return None
+
+
+def find_cached_specs(cache_dir: str, label: str) -> Optional[str]:
+    matches = glob.glob(os.path.join(cache_dir, normalize_label(label), "specs.*"))
+    return matches[0] if matches else None
+
+
+def run_specs(
+    service_tag: str,
+    locale: str = DEFAULT_LOCALE,
+    headless: bool = False,
+    debug: bool = False,
+    chrome_binary: Optional[str] = None,
+    engine: str = "uc",
+    firefox_binary: Optional[str] = None,
+    geckodriver_binary: Optional[str] = None,
+    cache_dir: Optional[str] = None,
+    use_cache: bool = True,
+) -> str:
+    """Resolve `service_tag`, open its overview page's "Product
+    Specifications" link, click through to export it, and save the
+    downloaded file to <cache_dir>/<service_tag>/specs.<ext>, returning
+    its path. A cached file (from an earlier run) is reused as-is with no
+    live site access at all, unless use_cache is False.
+    """
+    cache_dir = cache_dir or DEFAULT_CACHE_DIR
+    if use_cache:
+        cached = find_cached_specs(cache_dir, service_tag)
+        if cached:
+            progress(f"Using cached specifications from {cached} (--no-cache to bypass)")
+            return cached
+
+    label_dir = os.path.join(cache_dir, normalize_label(service_tag))
+    os.makedirs(label_dir, exist_ok=True)
+    # The label directory doubles as the browser's configured download
+    # directory (build_any_driver's download_dir), so the export lands
+    # straight in its final home with no separate move step needed for
+    # the directory itself - only the filename is normalized afterwards.
+    before = set(os.listdir(label_dir))
+
+    driver = build_any_driver(engine, headless, chrome_binary, firefox_binary, geckodriver_binary, download_dir=label_dir)
+    try:
+        slug = resolve_service_tag_slug(driver, service_tag, locale, debug=debug)
+        progress(f"Resolved to '{slug}'; looking for the '{PRODUCT_SPECIFICATIONS_LINK_TEXT}' link...")
+
+        clicked = click_link_by_text(driver, [PRODUCT_SPECIFICATIONS_LINK_TEXT], timeout=15)
+        if not clicked:
+            if debug:
+                save_debug_artifacts(driver, "dell_debug_specs_overview")
+            raise RuntimeError(
+                f"Could not find a '{PRODUCT_SPECIFICATIONS_LINK_TEXT}' link on the resolved overview "
+                f"page for service tag '{service_tag}'. Re-run with --debug and share "
+                "dell_debug_specs_overview.html so the selector can be fixed."
+            )
+
+        # "Product Specifications" may open a new tab instead of navigating
+        # the current one - follow it if so.
+        handles_before = driver.window_handles
+        time.sleep(2)
+        if len(driver.window_handles) > len(handles_before):
+            driver.switch_to.window(driver.window_handles[-1])
+        dismiss_cookie_banner(driver, WebDriverWait(driver, 8))
+        dismiss_feedback_popup(driver)
+        if debug:
+            save_debug_artifacts(driver, "dell_debug_specs_page")
+
+        progress("Looking for the export control...")
+        exported = click_link_by_text(driver, SPECS_EXPORT_LINK_TEXTS, timeout=15)
+        if not exported:
+            raise RuntimeError(
+                f"Could not find an export link/button (tried: {', '.join(SPECS_EXPORT_LINK_TEXTS)}) on "
+                f"the specifications page for service tag '{service_tag}'. Re-run with --debug and share "
+                "dell_debug_specs_page.html so the selector can be fixed."
+            )
+        progress(f"Clicked '{exported}'; waiting for the download...")
+
+        downloaded = wait_for_download(label_dir, before)
+        if not downloaded:
+            raise RuntimeError(
+                f"Clicked '{exported}' but no new file appeared in {label_dir} within the timeout. "
+                "Dell's export may have opened in a new tab/viewer instead of downloading directly."
+            )
+    finally:
+        driver.quit()
+
+    ext = os.path.splitext(downloaded)[1] or ".pdf"
+    final_path = os.path.join(label_dir, f"specs{ext}")
+    if downloaded != final_path:
+        os.replace(downloaded, final_path)
+    progress(f"Saved product specifications to {final_path}")
+    return final_path
 
 
 def find_cards(driver) -> List:
@@ -1545,17 +1742,22 @@ def build_any_driver(
     chrome_binary: Optional[str]      = None,
     firefox_binary: Optional[str]     = None,
     geckodriver_binary: Optional[str] = None,
+    download_dir: Optional[str]       = None,
 ):
     """Dispatch to the right build_driver*() for `engine`. Shared by
-    run_scrape() and --list, so both respect --engine/--headless/binary
-    overrides identically.
+    run_scrape(), --list, and --specs, so all three respect
+    --engine/--headless/binary overrides identically. `download_dir`
+    (--specs only) makes the browser save a download straight to that
+    directory instead of prompting or opening it inline.
     """
     if engine == "uc":
-        return build_driver_uc(headless=headless, chrome_binary=chrome_binary)
+        return build_driver_uc(headless=headless, chrome_binary=chrome_binary, download_dir=download_dir)
     elif engine == "firefox":
-        return build_driver_firefox(headless=headless, firefox_binary=firefox_binary, geckodriver_binary=geckodriver_binary)
+        return build_driver_firefox(
+            headless=headless, firefox_binary=firefox_binary, geckodriver_binary=geckodriver_binary, download_dir=download_dir
+        )
     else:
-        return build_driver(headless=headless, chrome_binary=chrome_binary)
+        return build_driver(headless=headless, chrome_binary=chrome_binary, download_dir=download_dir)
 
 
 LIST_TARGETS = {"categories", "os", "types"}
@@ -1951,6 +2153,17 @@ def main() -> None:
         "robot' checkbox challenge if Akamai shows one, but it can still fail outright.",
     )
     parser.add_argument(
+        "--specs",
+        action="store_true",
+        help="Export a resolved service tag's Product Specifications instead of scraping --type: "
+        "resolves --servicetag, clicks 'Product Specifications' on its overview page, then clicks "
+        "through to export it, saving the downloaded file to --cache-dir (default: "
+        f"{DEFAULT_CACHE_DIR}) as <servicetag>/specs.<ext> and printing its path. Requires "
+        "--servicetag (not --model/--url), since that link only appears once a tag has actually been "
+        "resolved. A cached file from an earlier run is reused with no live site access at all, "
+        "unless --no-cache is given.",
+    )
+    parser.add_argument(
         "--category", "--cat", dest="category", default="BIOS", help="Driver category to filter on (default: BIOS)"
     )
     parser.add_argument(
@@ -2063,6 +2276,29 @@ def main() -> None:
         parser.print_usage(sys.stderr)
         print(f"{parser.prog}: error: one of --model, --url, or --servicetag is required", file=sys.stderr)
         sys.exit(2)
+
+    if args.specs:
+        if not args.servicetag:
+            print(f"{parser.prog}: error: --specs requires --servicetag (not --model/--url)", file=sys.stderr)
+            sys.exit(2)
+        try:
+            path = run_specs(
+                args.servicetag,
+                locale=args.locale,
+                headless=args.headless,
+                debug=args.debug,
+                chrome_binary=args.chrome_binary,
+                engine=args.engine,
+                firefox_binary=args.firefox_binary,
+                geckodriver_binary=args.geckodriver_binary,
+                cache_dir=args.cache_dir,
+                use_cache=not args.no_cache,
+            )
+        except RuntimeError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
+        print(path)
+        sys.exit(0)
 
     os_filter = None if args.os_filter.lower() == "none" else args.os_filter
     args.page_type = normalize_type(args.page_type)

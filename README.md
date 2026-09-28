@@ -8,7 +8,7 @@ model name, a direct URL, or a service tag.
 
 ## Version
 
-**0.4.8**, see `CHANGELOG.md` for the full version history. This section
+**0.4.9**, see `CHANGELOG.md` for the full version history. This section
 is kept in sync with `__version__` in `dwelf.py`; run `python3 dwelf.py
 --version` to confirm what you actually have installed.
 
@@ -201,6 +201,7 @@ python3 dwelf.py --model R630 --type manuals --search "release notes"   # post-f
 # Alternative ways to target a product
 python3 dwelf.py --url <a product's page URL> --category BIOS   # instead of --model
 python3 dwelf.py --servicetag 1MJ4LG2                            # resolve a real tag (intermittent, see below)
+python3 dwelf.py --servicetag 1MJ4LG2 --specs                    # export & cache Product Specifications (needs --servicetag)
 python3 dwelf.py --geturl --model R630 --type manuals            # just print the constructed URL, no browser
 
 # Discovering valid values
@@ -254,6 +255,10 @@ writing a new cache file, `--cache-dir` to use a different location, or
 just delete the relevant file (or the whole `~/.dwelf/cache` directory)
 to force a fresh scrape next time.
 
+`--specs` uses the same directory and the same `--servicetag` label, e.g.
+`~/.dwelf/cache/1mj4lg2/specs.pdf`, following the same `--no-cache`/
+`--cache-dir` rules above.
+
 ## Flag reference
 
 | Flag | Default | Purpose |
@@ -261,6 +266,7 @@ to force a fresh scrape next time.
 | `--model MODEL` | - | Dell model name, e.g. `R730`, `"Dell Precision Tower 3420"`. See [Supported product lines](#supported-product-lines-for---model). |
 | `--url URL` | - | A full Dell product-support URL, instead of `--model`. |
 | `--servicetag TAG` | - | Resolve a real service tag to a product instead of guessing `--model`. Intermittent, see [Known limitations](#known-limitations). |
+| `--specs` | off | Export `--servicetag`'s Product Specifications and cache it instead of scraping `--type`. Requires `--servicetag`. See [Caching](#caching) and [Known limitations](#known-limitations). |
 | `--geturl` | off | Print the constructed URL and exit. No browser, no network. Not compatible with `--servicetag`. |
 | `--checkconfig` | off | Report whether each `requirements.txt` package is installed and exit. No `--model`/`--url`/`--servicetag`, no browser, no network. |
 | `--list {categories,os,types}` | - | Print available values and exit instead of scraping. `types` needs no `--model`/`--url`; `categories`/`os` need one and always use that product's drivers page. |
@@ -332,6 +338,16 @@ Use `--geturl` to check the constructed URL before a full run, or pass
   `www.dell.com` webpage (advisories, articles, some manuals, videos)
   will likely fail the same way plain `curl`/`requests` do against Dell's
   pages generally.
+- **`--specs`'s "Product Specifications" and export selectors are NOT yet
+  confirmed end-to-end.** Everything up to a resolved `--servicetag` is
+  the same confirmed code path `--servicetag` alone uses; clicking
+  "Product Specifications" and then the specs page's own export control
+  were written against the one confirmed screenshot of a resolved
+  overview page seen during development, not a live click-through, since
+  Dell's Akamai bot protection blocked every further resolution attempt
+  in that same testing session. If it doesn't find either, `--debug` and
+  the resulting `dell_debug_specs_*.html` dumps are the way to fix the
+  selectors.
 
 ## Troubleshooting
 

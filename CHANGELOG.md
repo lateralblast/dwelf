@@ -702,6 +702,58 @@ order they actually happened, each as its own version starting at 0.0.1.
   filters on the same product never reads stale results from a different
   filter by mistake.
 
+## [0.4.9] - `--specs` flag; fixed a crash in the Akamai-challenge resubmit path
+
+- Added `--specs` (requires `--servicetag`, not `--model`/`--url`):
+  resolves the tag, clicks "Product Specifications" on its resolved
+  overview page, clicks through to export it, and saves the download to
+  `--cache-dir`'s `<servicetag>/specs.<ext>`, printing its path. A cached
+  file from an earlier run is reused as-is, with no live site access at
+  all, same as the result cache added in 0.4.8 - `--no-cache`/
+  `--cache-dir` apply here too.
+- `--specs` requiring `--servicetag` isn't an arbitrary restriction:
+  confirmed by testing that "Product Specifications" only appears in
+  Quick Links on a *resolved* overview page - neither the plain,
+  not-yet-identified `SERVICE_TAG_BASE_SLUG` overview page nor a
+  `--model`-style direct overview page for a different product
+  (`poweredge-r730`, tested directly) shows it.
+- Added `download_dir` support to `build_driver()`/`build_driver_uc()`/
+  `build_driver_firefox()` (Chrome: prefs plus a `Page.setDownloadBehavior`
+  CDP call for reliability; Firefox: `browser.download.dir` plus disabling
+  `pdfjs` so a PDF downloads instead of opening in Firefox's inline
+  viewer), so a browser built for `--specs` saves straight into the cache
+  label directory instead of prompting or opening the file inline.
+- New `click_link_by_text()` (PARTIAL_LINK_TEXT first, then an XPath
+  text-match fallback for a `<button>`) and `wait_for_download()` (polls
+  a directory for a new, no-longer-`.crdownload`/`.part` file) are the
+  two pieces `run_specs()` is built from.
+- **Not confirmed end-to-end.** Getting to a resolved `--servicetag` is
+  the same code path already confirmed working in earlier versions (see
+  0.4.7), but Dell's Akamai bot protection blocked every further
+  `1MJ4LG2` resolution attempt made while writing this feature - most
+  attempts timed out silently, and the ones that got as far as an "I'm
+  not a robot" challenge kept re-presenting it repeatedly (confirmed by
+  testing: the same challenge was solved and re-shown 6+ times in a row
+  within a single attempt), suggesting this session's IP/browser
+  fingerprint had accumulated enough automated-lookup history that day to
+  get more aggressively challenged than earlier in the same session. The
+  `PRODUCT_SPECIFICATIONS_LINK_TEXT`/`SPECS_EXPORT_LINK_TEXTS` selectors
+  were therefore written from the one confirmed screenshot of a resolved
+  page (from testing in 0.4.7) rather than an actual click-through, and
+  the export page's own markup has not been seen at all. Treat both as
+  unconfirmed until a future run with a less-challenged session actually
+  exercises them; `--debug`'s `dell_debug_specs_*` dumps are the intended
+  way to fix them if they're wrong.
+- Fixed a real, previously-crashing bug hit while testing the above:
+  `resolve_service_tag_slug()`'s post-challenge resubmit
+  (`submit_tag()`) only caught `NoSuchElementException`, but a click
+  right after solving a challenge can still land on the challenge
+  iframe mid-teardown, raising `ElementClickInterceptedException`
+  instead and crashing the whole script with a traceback - confirmed
+  happening in practice (reproduced twice). Now also caught, and a
+  2-second wait was added before the resubmit to make hitting it less
+  likely in the first place.
+
 ## Also along the way
 
 - Renamed the main orchestration function from `get_drivers()` to
