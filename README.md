@@ -8,7 +8,7 @@ model name, a direct URL, or a service tag.
 
 ## Version
 
-**0.5.1**, see `CHANGELOG.md` for the full version history. This section
+**0.5.2**, see `CHANGELOG.md` for the full version history. This section
 is kept in sync with `__version__` in `dwelf.py`; run `python3 dwelf.py
 --version` to confirm what you actually have installed.
 
@@ -255,9 +255,9 @@ writing a new cache file, `--cache-dir` to use a different location, or
 just delete the relevant file (or the whole `~/.dwelf/cache` directory)
 to force a fresh scrape next time.
 
-`--specs` uses the same directory and the same `--servicetag` label, e.g.
-`~/.dwelf/cache/1MJ4LG2/specs.pdf`, following the same `--no-cache`/
-`--cache-dir` rules above.
+`--specs` uses the same directory and the same `--servicetag` label for
+both, e.g. `~/.dwelf/cache/1MJ4LG2/1MJ4LG2.pdf`, following the same
+`--no-cache`/`--cache-dir` rules above.
 
 ## Flag reference
 

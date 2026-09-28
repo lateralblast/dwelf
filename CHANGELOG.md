@@ -801,6 +801,19 @@ order they actually happened, each as its own version starting at 0.0.1.
   uses to build a Dell URL (a separate function) is unrelated and
   unchanged, since Dell's own URLs require lowercase.
 
+## [0.5.2] - `--specs` cache filename uses the service tag, not `specs.<ext>`
+
+- `run_specs()` now saves an exported result as
+  `<cache_dir>/<servicetag>/<servicetag>.<ext>` (e.g.
+  `1MJ4LG2/1MJ4LG2.csv`) instead of `<servicetag>/specs.<ext>`, and
+  `find_cached_specs()`'s glob was updated to match. Preference, not a
+  bug: the servicetag directory already scopes the file, but having the
+  tag in the filename itself matters when a file is copied out of that
+  directory. Found because an old cache file predating even the original
+  `specs.<ext>` convention (named `<servicetag>.<ext>` already, just
+  lowercase before 0.5.1) wasn't being picked up; that file has now been
+  renamed on disk to match this convention going forward.
+
 ## Also along the way
 
 - Renamed the main orchestration function from `get_drivers()` to

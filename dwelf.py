@@ -130,7 +130,7 @@ import urllib.request
 from dataclasses import asdict, dataclass
 from typing import List, Optional
 
-__version__ = "0.5.1"
+__version__ = "0.5.2"
 __long_name__ = "Dell Website Equipment Link Finder"
 
 
@@ -1311,7 +1311,8 @@ def wait_for_download(directory: str, before: set, timeout: float = 90) -> Optio
 
 
 def find_cached_specs(cache_dir: str, label: str) -> Optional[str]:
-    matches = glob.glob(os.path.join(cache_dir, normalize_label(label), "specs.*"))
+    normalized = normalize_label(label)
+    matches = glob.glob(os.path.join(cache_dir, normalized, f"{normalized}.*"))
     return matches[0] if matches else None
 
 
@@ -1329,9 +1330,9 @@ def run_specs(
 ) -> str:
     """Resolve `service_tag`, open its overview page's "Product
     Specifications" link, click through to export it, and save the
-    downloaded file to <cache_dir>/<service_tag>/specs.<ext>, returning
-    its path. A cached file (from an earlier run) is reused as-is with no
-    live site access at all, unless use_cache is False.
+    downloaded file to <cache_dir>/<service_tag>/<service_tag>.<ext>,
+    returning its path. A cached file (from an earlier run) is reused
+    as-is with no live site access at all, unless use_cache is False.
     """
     cache_dir = cache_dir or DEFAULT_CACHE_DIR
     if use_cache:
@@ -1401,7 +1402,7 @@ def run_specs(
         driver.quit()
 
     ext = os.path.splitext(downloaded)[1] or ".pdf"
-    final_path = os.path.join(label_dir, f"specs{ext}")
+    final_path = os.path.join(label_dir, f"{normalize_label(service_tag)}{ext}")
     if downloaded != final_path:
         os.replace(downloaded, final_path)
     progress(f"Saved product specifications to {final_path}")
@@ -2230,7 +2231,7 @@ def main() -> None:
         help="Export a resolved service tag's Product Specifications instead of scraping --type: "
         "resolves --servicetag, clicks 'Product Specifications' on its overview page, then clicks "
         "through to export it, saving the downloaded file to --cache-dir (default: "
-        f"{DEFAULT_CACHE_DIR}) as <servicetag>/specs.<ext>. If it's a .csv, its rows are printed as a "
+        f"{DEFAULT_CACHE_DIR}) as <servicetag>/<servicetag>.<ext>. If it's a .csv, its rows are printed as a "
         "table (like --display table); otherwise its path is printed. Requires --servicetag (not "
         "--model/--url), since that link only appears once a tag has actually been resolved. A cached "
         "file from an earlier run is reused with no live site access at all, unless --no-cache is given.",
