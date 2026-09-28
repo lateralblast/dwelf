@@ -635,6 +635,41 @@ order they actually happened, each as its own version starting at 0.0.1.
   through `run_scrape()`/`scrape_*_page()` for `save_debug_artifacts()`
   calls is unchanged and still tied only to `--debug`.
 
+## [0.4.7] - Fixed the SERVICE_TAG_BASE_SLUG same-product gap; dismiss feedback popup
+
+- Fixed `resolve_service_tag_slug()` silently failing (3/3 attempts,
+  always timing out) for a service tag that belongs to
+  `SERVICE_TAG_BASE_SLUG` (`poweredge-r630`) itself - the exact gap the
+  code comment above `SERVICE_TAG_INPUT_ID` already documented, now
+  confirmed happening in practice with a real tag (`1MJ4LG2`): a `--debug`
+  screenshot showed Dell had resolved the tag to the correct product
+  (title, Service Tag, and per-tag widgets all rendered) within about 2
+  seconds of submitting, but the script kept polling for a URL slug other
+  than `poweredge-r630`, which this tag's resolved URL never has, so it
+  ran out the full `poll_timeout` on every attempt regardless. Now, when
+  the URL slug is still `SERVICE_TAG_BASE_SLUG`, resolution is also
+  checked via `document.body.innerText` (through `execute_script()`,
+  since the service tag label isn't reliably present in
+  `driver.page_source`) for the submitted tag having been echoed back
+  into the page - true only once Dell's widget has actually resolved it.
+- Added `dismiss_feedback_popup()` (a "We value your feedback!" Qualtrics-
+  style survey intercept, confirmed appearing on a real page load by a
+  user screenshot mid-session) and call it everywhere
+  `dismiss_cookie_banner()` already is, plus once per iteration of
+  `resolve_service_tag_slug()`'s poll loop, in case it appears
+  mid-wait. Modeled on `try_solve_akamai_challenge()`: checks the
+  top-level document, then every iframe, best-effort and non-fatal either
+  way.
+- **Not fully re-confirmed end-to-end**: after these fixes, `1MJ4LG2` hit
+  Akamai's silent block on every one of 6 further attempts in the same
+  session (consistent with the already-documented "most attempts fail
+  silently" behavior), so the new `document.body.innerText` resolution
+  path itself has not yet been observed succeeding against a live
+  resolved page. It's a direct, narrowly-targeted fix for the confirmed
+  gap above and doesn't change behavior for the normal case (slug differs
+  from `SERVICE_TAG_BASE_SLUG`), but treat it as unconfirmed until a
+  future run actually exercises it.
+
 ## Also along the way
 
 - Renamed the main orchestration function from `get_drivers()` to

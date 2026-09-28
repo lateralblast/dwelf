@@ -126,7 +126,7 @@ import urllib.request
 from dataclasses import asdict, dataclass
 from typing import List, Optional
 
-__version__ = "0.4.6"
+__version__ = "0.4.7"
 __long_name__ = "Dell Website Equipment Link Finder"
 
 
@@ -538,8 +538,13 @@ REGULATORY_ROW_SELECTOR = f"#{REGULATORY_CONTAINER_ID} div.dds__col--lg-12.dds__
 # surface real messages (SERVICE_TAG_ERROR_IDS), which is how a definite
 # "no" is told apart from Akamai silently blocking the request. One
 # consequence of using a fixed base slug: if a tag happens to belong to
-# SERVICE_TAG_BASE_SLUG itself, there's no distinct signal to tell that
-# apart from a silent block, so that case isn't specially detected here.
+# SERVICE_TAG_BASE_SLUG itself, the URL never changes, so resolve_service_
+# tag_slug() falls back to checking whether the submitted tag has been
+# echoed back into the rendered page instead - confirmed necessary by
+# testing with a real tag (1MJ4LG2) that belongs to SERVICE_TAG_BASE_SLUG
+# (poweredge-r630) itself: Dell resolved it correctly within ~2 seconds,
+# but the URL-only check timed out 3/3 attempts regardless, since it never
+# saw a slug other than the starting one.
 SERVICE_TAG_INPUT_ID         = "homemfe-dropdown-input"
 SERVICE_TAG_SUBMIT_BUTTON_ID = "btnSubmit_dep"
 SERVICE_TAG_BASE_SLUG        = "poweredge-r630"
@@ -813,6 +818,50 @@ def dismiss_cookie_banner(driver, wait: WebDriverWait) -> None:
             continue
 
 
+def dismiss_feedback_popup(driver) -> bool:
+    """Best-effort: dismiss Dell's "We value your feedback!" survey popup
+    (a Qualtrics-style intercept - confirmed by a user to appear on at
+    least one real page load) by clicking its "No, thanks" button, if
+    present. Checks the top-level document first, then every iframe, like
+    try_solve_akamai_challenge() - Qualtrics widgets are commonly
+    iframe-embedded and this hasn't been confirmed either way. Never
+    raises; a missing or already-dismissed popup isn't an error, and
+    callers don't need its return value for anything but logging.
+    """
+
+    def find_and_click_here() -> bool:
+        buttons = [
+            b
+            for b in driver.find_elements(
+                By.XPATH, "//button[contains(translate(., 'NO, THANKS', 'no, thanks'), 'no, thanks')]"
+            )
+            if b.is_displayed()
+        ]
+        if not buttons:
+            return False
+        try:
+            buttons[0].click()
+        except Exception:
+            return False
+        return True
+
+    if find_and_click_here():
+        progress("Dismissed a feedback survey popup (top-level document)")
+        return True
+
+    for frame in driver.find_elements(By.TAG_NAME, "iframe"):
+        try:
+            driver.switch_to.frame(frame)
+            if find_and_click_here():
+                progress("Dismissed a feedback survey popup (iframe)")
+                return True
+        except Exception:
+            pass
+        finally:
+            driver.switch_to.default_content()
+    return False
+
+
 def select_dropdown_option(
     driver, trigger_id: str, popup_id: str, value: str, timeout: float = 10, close_after: bool = True
 ) -> bool:
@@ -993,8 +1042,9 @@ def resolve_service_tag_slug(
     """Look up a service tag via a product overview page's "Identify a
     product" widget and return the resolved product slug (e.g.
     "poweredge-r630") for use with TYPE_URL_TEMPLATES. See the comment
-    above SERVICE_TAG_INPUT_ID for how this works and its known gap (a tag
-    that happens to belong to SERVICE_TAG_BASE_SLUG itself).
+    above SERVICE_TAG_INPUT_ID for how this works, including the tag-
+    belongs-to-SERVICE_TAG_BASE_SLUG-itself case (confirmed by testing
+    with a real tag) this handles via a page-text check.
     """
     base_url = f"https://www.dell.com/support/product-details/{locale}/product/{SERVICE_TAG_BASE_SLUG}/overview"
 
@@ -1012,6 +1062,7 @@ def resolve_service_tag_slug(
         progress(f"Looking up service tag '{service_tag}' (attempt {attempt}/{attempts})...")
         driver.get(base_url)
         dismiss_cookie_banner(driver, WebDriverWait(driver, 8))
+        dismiss_feedback_popup(driver)
 
         try:
             WebDriverWait(driver, 15).until(EC.element_to_be_clickable((By.ID, SERVICE_TAG_INPUT_ID)))
@@ -1028,12 +1079,29 @@ def resolve_service_tag_slug(
         challenged = False
         while time.time() < deadline:
             time.sleep(1)
+            dismiss_feedback_popup(driver)
 
             match = re.search(r"/product/([^/?#]+)", driver.current_url)
-            if match and match.group(1) != SERVICE_TAG_BASE_SLUG:
-                slug = match.group(1)
-                progress(f"Service tag resolved to '{slug}'")
-                return slug
+            resolved_slug = match.group(1) if match else None
+            if resolved_slug == SERVICE_TAG_BASE_SLUG:
+                # The URL alone can't tell a still-unresolved widget apart
+                # from a tag that genuinely belongs to SERVICE_TAG_BASE_SLUG
+                # itself (confirmed happening in practice for a real tag) -
+                # both leave the URL unchanged. Check whether the tag we
+                # submitted has actually been echoed back into the rendered
+                # page (only true once Dell's widget has resolved it) via
+                # innerText rather than driver.page_source, since the
+                # service tag label is rendered by a component page_source
+                # doesn't reliably capture.
+                try:
+                    page_text = driver.execute_script("return document.body.innerText") or ""
+                except Exception:
+                    page_text = ""
+                resolved_slug = resolved_slug if service_tag.lower() in page_text.lower() else None
+
+            if resolved_slug:
+                progress(f"Service tag resolved to '{resolved_slug}'")
+                return resolved_slug
 
             for error_id in SERVICE_TAG_ERROR_IDS:
                 try:
@@ -1515,6 +1583,7 @@ def run_list(
         progress(f"Opening {url}")
         driver.get(url)
         dismiss_cookie_banner(driver, WebDriverWait(driver, 8))
+        dismiss_feedback_popup(driver)
         wait = WebDriverWait(driver, 15)
         try:
             wait.until(EC.presence_of_element_located((By.ID, CATEGORY_TRIGGER_ID)))
@@ -1558,6 +1627,7 @@ def run_scrape(
 
         progress("Dismissing cookie banner (if present)...")
         dismiss_cookie_banner(driver, WebDriverWait(driver, 8))
+        dismiss_feedback_popup(driver)
         if debug:
             save_debug_artifacts(driver, "dell_debug_02_after_cookie")
 
