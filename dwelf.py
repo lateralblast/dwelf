@@ -1209,24 +1209,71 @@ def resolve_service_tag_slug(
 # nor a --model overview page for a *different* product shows it, only a
 # tag that's actually been resolved via the "Identify a product" widget
 # does. This is why --specs requires --servicetag rather than --model.
-PRODUCT_SPECIFICATIONS_LINK_TEXT = "Product Specifications"
+#
+# Confirmed by inspecting a real resolved overview page's saved HTML: it's
+# <a id="review-specs-drawer-trigger" href="javascript:void(0)">Product
+# Specifications</a>, wired up via `DDS.Drawer(dom.get("review-specs-
+# drawer"), {trigger: "#review-specs-drawer-trigger", ...})` - a same-page
+# slide-out drawer, not a new page or tab. Its container is present in the
+# static markup but closed and empty:
+# <div id="review-specs-drawer" class="dds__drawer" aria-hidden="true">
+#   ...<div id="ReviewSpecs" class="dds__d-none"></div>
+#   <div id="dep_reviewspec_loading" class="dds__d-none">...spinner...</div>
+# so the export control itself is never present until the drawer is
+# opened and `ReviewSpecs.init()` (bound to its ddsDrawerOpenEvent) fetches
+# real content into #ReviewSpecs - confirmed by inspecting the saved page,
+# not observed live. The trigger id appears TWICE in the DOM (one per
+# responsive breakpoint's accordion copy, confirmed by testing - only one
+# is ever visible at a time), so it's clicked via click_first_visible()
+# rather than a plain find_element(), which would get stuck waiting on
+# whichever copy happens to be first in the DOM even if that one is the
+# hidden one.
+PRODUCT_SPECIFICATIONS_TRIGGER_ID = "review-specs-drawer-trigger"
+PRODUCT_SPECIFICATIONS_DRAWER_ID = "review-specs-drawer"
 
-# The specs page's own export control - NOT yet confirmed by live
-# testing: every further --servicetag resolution attempt in the same
-# session --specs was written in got silently blocked by Dell's Akamai
-# bot protection before reaching this page (see CHANGELOG), so
-# click_link_by_text() tries each of these plausible texts in order
-# rather than assuming one is right.
-SPECS_EXPORT_LINK_TEXTS = ["Export PDF", "Export as PDF", "Export"]
+# The drawer's own export control - NOT yet confirmed by live testing:
+# every further --servicetag resolution attempt in the same session
+# --specs was written in got silently blocked by Dell's Akamai bot
+# protection before the drawer's lazily-fetched content was ever seen
+# live (see CHANGELOG). The one confirmed fact about it is indirect: a
+# real user's export of this same drawer downloaded a .csv (a parts/BOM
+# listing), not a PDF, so "Export"/"Export CSV" are tried rather than a
+# PDF-flavored guess. Scoped to PRODUCT_SPECIFICATIONS_DRAWER_ID so an
+# unrelated "Export" elsewhere on the page is never matched by mistake.
+SPECS_EXPORT_LINK_TEXTS = ["Export", "Export CSV", "Download"]
 
 
-def click_link_by_text(driver, texts: List[str], timeout: float = 10) -> Optional[str]:
+def click_first_visible(driver, by, selector: str, timeout: float = 10):
+    """Click the first currently-visible, enabled match for (by,
+    selector), polling until timeout. Needed for markup with the same id
+    repeated across responsive breakpoints - see
+    PRODUCT_SPECIFICATIONS_TRIGGER_ID's comment - where a plain
+    find_element()/element_to_be_clickable() would get stuck on whichever
+    copy happens to be first in the DOM even if that one is hidden.
+    Returns the clicked element, or None if nothing visible appeared.
+    """
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        visible = [el for el in driver.find_elements(by, selector) if el.is_displayed() and el.is_enabled()]
+        if visible:
+            try:
+                visible[0].click()
+                return visible[0]
+            except Exception:
+                pass
+        time.sleep(0.5)
+    return None
+
+
+def click_link_by_text(driver, texts: List[str], timeout: float = 10, root: Optional[str] = None) -> Optional[str]:
     """Click the first visible, clickable link/button whose text matches
     any of `texts` (tried in order; PARTIAL_LINK_TEXT for an <a> tag
     first, then a text-normalizing XPath fallback for a <button> or
     anything else), and return the text that matched, or None if none of
-    them appeared within `timeout`. Used by run_specs() for "Product
-    Specifications" and the specs page's export control.
+    them appeared within `timeout`. `root`, an element id, scopes the
+    XPath fallback to that element's subtree (PARTIAL_LINK_TEXT has no
+    such option, so it's tried unscoped either way). Used by run_specs()
+    for the specs drawer's export control.
     """
     for text in texts:
         try:
@@ -1235,8 +1282,9 @@ def click_link_by_text(driver, texts: List[str], timeout: float = 10) -> Optiona
             return text
         except TimeoutException:
             pass
+        prefix = f'//*[@id="{root}"]' if root else ""
+        xpath = f'{prefix}//*[self::a or self::button][contains(normalize-space(.), "{text}")]'
         try:
-            xpath = f'//*[self::a or self::button][contains(normalize-space(.), "{text}")]'
             el = WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((By.XPATH, xpath)))
             el.click()
             return text
@@ -1303,44 +1351,51 @@ def run_specs(
     driver = build_any_driver(engine, headless, chrome_binary, firefox_binary, geckodriver_binary, download_dir=label_dir)
     try:
         slug = resolve_service_tag_slug(driver, service_tag, locale, debug=debug)
-        progress(f"Resolved to '{slug}'; looking for the '{PRODUCT_SPECIFICATIONS_LINK_TEXT}' link...")
+        progress(f"Resolved to '{slug}'; opening the Product Specifications drawer...")
 
-        clicked = click_link_by_text(driver, [PRODUCT_SPECIFICATIONS_LINK_TEXT], timeout=15)
-        if not clicked:
+        trigger = click_first_visible(driver, By.ID, PRODUCT_SPECIFICATIONS_TRIGGER_ID, timeout=15)
+        if not trigger:
             if debug:
                 save_debug_artifacts(driver, "dell_debug_specs_overview")
             raise RuntimeError(
-                f"Could not find a '{PRODUCT_SPECIFICATIONS_LINK_TEXT}' link on the resolved overview "
-                f"page for service tag '{service_tag}'. Re-run with --debug and share "
+                f"Could not find a visible '#{PRODUCT_SPECIFICATIONS_TRIGGER_ID}' link on the resolved "
+                f"overview page for service tag '{service_tag}'. Re-run with --debug and share "
                 "dell_debug_specs_overview.html so the selector can be fixed."
             )
 
-        # "Product Specifications" may open a new tab instead of navigating
-        # the current one - follow it if so.
-        handles_before = driver.window_handles
-        time.sleep(2)
-        if len(driver.window_handles) > len(handles_before):
-            driver.switch_to.window(driver.window_handles[-1])
-        dismiss_cookie_banner(driver, WebDriverWait(driver, 8))
-        dismiss_feedback_popup(driver)
+        # The drawer's content is fetched only once opened (see
+        # PRODUCT_SPECIFICATIONS_TRIGGER_ID's comment), so wait for its
+        # container to actually report open before looking inside it. Its
+        # closed-state aria-hidden="true" is confirmed from the saved
+        # page's markup; the flip to "false" on open is inferred from
+        # standard DDS/ARIA drawer behavior and the ddsDrawerOpenEvent it
+        # fires, not observed live - if this turns out wrong, the fallback
+        # below still gives click_link_by_text() a chance once content has
+        # had time to render regardless.
+        try:
+            WebDriverWait(driver, 15).until(
+                EC.attribute_to_be((By.ID, PRODUCT_SPECIFICATIONS_DRAWER_ID), "aria-hidden", "false")
+            )
+        except TimeoutException:
+            progress(f"'#{PRODUCT_SPECIFICATIONS_DRAWER_ID}' never reported open; looking for the export control anyway")
+        time.sleep(1)  # let the drawer's own fetched content finish rendering
         if debug:
-            save_debug_artifacts(driver, "dell_debug_specs_page")
+            save_debug_artifacts(driver, "dell_debug_specs_drawer")
 
         progress("Looking for the export control...")
-        exported = click_link_by_text(driver, SPECS_EXPORT_LINK_TEXTS, timeout=15)
+        exported = click_link_by_text(driver, SPECS_EXPORT_LINK_TEXTS, timeout=15, root=PRODUCT_SPECIFICATIONS_DRAWER_ID)
         if not exported:
             raise RuntimeError(
-                f"Could not find an export link/button (tried: {', '.join(SPECS_EXPORT_LINK_TEXTS)}) on "
-                f"the specifications page for service tag '{service_tag}'. Re-run with --debug and share "
-                "dell_debug_specs_page.html so the selector can be fixed."
+                f"Could not find an export link/button (tried: {', '.join(SPECS_EXPORT_LINK_TEXTS)}) inside "
+                f"'#{PRODUCT_SPECIFICATIONS_DRAWER_ID}' for service tag '{service_tag}'. Re-run with --debug "
+                "and share dell_debug_specs_drawer.html so the selector can be fixed."
             )
         progress(f"Clicked '{exported}'; waiting for the download...")
 
         downloaded = wait_for_download(label_dir, before)
         if not downloaded:
             raise RuntimeError(
-                f"Clicked '{exported}' but no new file appeared in {label_dir} within the timeout. "
-                "Dell's export may have opened in a new tab/viewer instead of downloading directly."
+                f"Clicked '{exported}' but no new file appeared in {label_dir} within the timeout."
             )
     finally:
         driver.quit()

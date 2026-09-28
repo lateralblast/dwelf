@@ -723,27 +723,46 @@ order they actually happened, each as its own version starting at 0.0.1.
   `pdfjs` so a PDF downloads instead of opening in Firefox's inline
   viewer), so a browser built for `--specs` saves straight into the cache
   label directory instead of prompting or opening the file inline.
-- New `click_link_by_text()` (PARTIAL_LINK_TEXT first, then an XPath
-  text-match fallback for a `<button>`) and `wait_for_download()` (polls
-  a directory for a new, no-longer-`.crdownload`/`.part` file) are the
-  two pieces `run_specs()` is built from.
-- **Not confirmed end-to-end.** Getting to a resolved `--servicetag` is
-  the same code path already confirmed working in earlier versions (see
-  0.4.7), but Dell's Akamai bot protection blocked every further
-  `1MJ4LG2` resolution attempt made while writing this feature - most
-  attempts timed out silently, and the ones that got as far as an "I'm
-  not a robot" challenge kept re-presenting it repeatedly (confirmed by
-  testing: the same challenge was solved and re-shown 6+ times in a row
-  within a single attempt), suggesting this session's IP/browser
-  fingerprint had accumulated enough automated-lookup history that day to
-  get more aggressively challenged than earlier in the same session. The
-  `PRODUCT_SPECIFICATIONS_LINK_TEXT`/`SPECS_EXPORT_LINK_TEXTS` selectors
-  were therefore written from the one confirmed screenshot of a resolved
-  page (from testing in 0.4.7) rather than an actual click-through, and
-  the export page's own markup has not been seen at all. Treat both as
-  unconfirmed until a future run with a less-challenged session actually
-  exercises them; `--debug`'s `dell_debug_specs_*` dumps are the intended
-  way to fix them if they're wrong.
+- New `click_first_visible()`, `click_link_by_text()` (PARTIAL_LINK_TEXT
+  first, then an XPath text-match fallback, optionally scoped to a root
+  element's subtree), and `wait_for_download()` (polls a directory for a
+  new, no-longer-`.crdownload`/`.part` file) are the pieces `run_specs()`
+  is built from.
+- **Selectors confirmed against a real resolved overview page's saved
+  HTML** (a user supplied a copy, since Dell's Akamai bot protection
+  blocked every further `1MJ4LG2` resolution attempt made while writing
+  this feature - see below): "Product Specifications" is
+  `<a id="review-specs-drawer-trigger" href="javascript:void(0)">`,
+  wired to a same-page DDS slide-out drawer (`id="review-specs-drawer"`,
+  `class="dds__drawer"`, `aria-hidden="true"` when closed), not a new
+  page or tab as first assumed - `run_specs()` was rewritten around this
+  (`click_first_visible()` for the trigger, since its id is duplicated
+  across responsive breakpoints and only one copy is ever visible;
+  waiting on the drawer's `aria-hidden` before looking for the export
+  control inside it, scoped via `click_link_by_text()`'s new `root`
+  param). The drawer's content (including its export control) is fetched
+  only once opened (`ReviewSpecs.init()`), so it's genuinely absent from
+  the static markup - not fully confirmed, but the same user's export of
+  this same drawer downloaded a `.csv` (a parts/BOM listing), which is
+  why `SPECS_EXPORT_LINK_TEXTS` now tries `"Export"`/`"Export CSV"`/
+  `"Download"` instead of the earlier, wrong PDF-flavored guesses.
+- **Still not confirmed end-to-end live.** Offline testing (loading the
+  saved overview page via a `file://` URL) confirmed `click_first_visible()`
+  finds and clicks the real trigger element without error, but the page's
+  own JavaScript (an external DDS bundle) never executed in that static
+  snapshot, so the drawer never actually opened there either - this
+  validates the selector and the click, not the resulting drawer-open/
+  export behavior. Getting to a resolved `--servicetag` at all remains
+  the same code path confirmed working in 0.4.7, but Dell's Akamai bot
+  protection blocked every further `1MJ4LG2` resolution attempt made
+  while writing this feature - most attempts timed out silently, and the
+  ones that got as far as an "I'm not a robot" challenge kept
+  re-presenting it repeatedly (confirmed by testing: the same challenge
+  was solved and re-shown 6+ times in a row within a single attempt).
+  Treat the drawer-open and export steps as unconfirmed until a future
+  run with a less-challenged session actually reaches them live;
+  `--debug`'s `dell_debug_specs_*` dumps are the intended way to fix them
+  if they're wrong.
 - Fixed a real, previously-crashing bug hit while testing the above:
   `resolve_service_tag_slug()`'s post-challenge resubmit
   (`submit_tag()`) only caught `NoSuchElementException`, but a click

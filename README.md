@@ -338,16 +338,21 @@ Use `--geturl` to check the constructed URL before a full run, or pass
   `www.dell.com` webpage (advisories, articles, some manuals, videos)
   will likely fail the same way plain `curl`/`requests` do against Dell's
   pages generally.
-- **`--specs`'s "Product Specifications" and export selectors are NOT yet
-  confirmed end-to-end.** Everything up to a resolved `--servicetag` is
-  the same confirmed code path `--servicetag` alone uses; clicking
-  "Product Specifications" and then the specs page's own export control
-  were written against the one confirmed screenshot of a resolved
-  overview page seen during development, not a live click-through, since
-  Dell's Akamai bot protection blocked every further resolution attempt
-  in that same testing session. If it doesn't find either, `--debug` and
-  the resulting `dell_debug_specs_*.html` dumps are the way to fix the
-  selectors.
+- **`--specs` is not confirmed end-to-end live.** Everything up to a
+  resolved `--servicetag` is the same confirmed code path `--servicetag`
+  alone uses. "Product Specifications" opens a same-page drawer rather
+  than a new page (confirmed against a real resolved overview page's
+  saved HTML: `<a id="review-specs-drawer-trigger">` wired to a DDS
+  drawer, `id="review-specs-drawer"`), so the selectors for both it and
+  the drawer's own export control are grounded in real markup, not a
+  guess - but the drawer's content (including the export control) is
+  fetched only once opened, so it was never actually seen, live or
+  offline: Dell's Akamai bot protection blocked every further resolution
+  attempt in the same testing session, and loading the saved page
+  offline confirmed the click itself works but not the drawer's
+  JavaScript (which never ran offline). If it doesn't find the export
+  control, `--debug` and the resulting `dell_debug_specs_*.html` dumps
+  are the way to fix the selector.
 
 ## Troubleshooting
 
