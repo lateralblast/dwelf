@@ -12,6 +12,10 @@ model name, a direct URL, or a service tag.
 is kept in sync with `__version__` in `dwelf.py`; run `python3 dwelf.py
 --version` to confirm what you actually have installed.
 
+## Help Support Development
+
+Fund me here: https://ko-fi.com/richardatlateralblast
+
 ## Example Usage
 
 Ouput in JSON (default):
