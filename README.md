@@ -14,7 +14,9 @@ is kept in sync with `__version__` in `dwelf.py`; run `python3 dwelf.py
 
 ## Help Support Development
 
-Fund me here: https://ko-fi.com/richardatlateralblast
+If you find this software useful and would like to support its development, please consider buying me a coffee:
+
+https://ko-fi.com/richardatlateralblast
 
 ## Example Usage
 
