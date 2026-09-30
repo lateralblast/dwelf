@@ -1,26 +1,26 @@
-![Dwelf Cat](/dwelf.jpg)
+![Dwelf Cat](dwelf.jpg)
 
 # dwelf.py - Dell Website Equipment Link Finder
 
 A command-line scraper for Dell's support site (drivers, manuals, articles,
-videos, advisories, regulatory documents) for a given Dell product, by
-model name, a direct URL, or a service tag.
+videos, advisories, regulatory documents, product specifications) for a
+given Dell product, by model name, a direct URL, or a service tag.
 
 ## Version
 
-**0.5.2**, see `CHANGELOG.md` for the full version history. This section
+**0.5.2**, see `CHANGELOG.md` for the complete, versioned history of every
+feature, bug, and thing confirmed (or ruled out) by testing. This section
 is kept in sync with `__version__` in `dwelf.py`; run `python3 dwelf.py
 --version` to confirm what you actually have installed.
 
 ## Help Support Development
 
-If you find this software useful and would like to support its development, please consider buying me a coffee:
-
-https://ko-fi.com/richardatlateralblast
+If you find this software useful and would like to support its development,
+please consider [buying me a coffee](https://ko-fi.com/richardatlateralblast).
 
 ## Example Usage
 
-Ouput in JSON (default):
+Output in JSON (default):
 
 ```
 ❯ python3 dwelf.py --model R630
@@ -115,7 +115,6 @@ Video (1)
 iDRAC with Lifecycle controller (2)
 ```
 
-
 ## Why this isn't a simple `requests`/`curl` script
 
 Dell's support site renders its content client-side and fronts everything
@@ -129,7 +128,7 @@ confirmed along the way.
 
 ## Requirements
 
-```
+```bash
 pip install -r requirements.txt
 ```
 
@@ -140,7 +139,7 @@ avoids that happening mid-run.)
 You also need **Google Chrome or Chromium installed** (Selenium's built-in
 "Selenium Manager" downloads a matching chromedriver automatically):
 
-```
+```bash
 sudo apt install chromium-browser   # or: google-chrome-stable
 ```
 
@@ -178,7 +177,7 @@ Non-headless Chrome needs a real or virtual X display, and `--headless`
 gets blocked by Dell's site (see below), so use Xvfb instead, confirmed
 working end-to-end:
 
-```
+```bash
 sudo apt install xvfb
 xvfb-run -a python3 dwelf.py --model R630
 ```
@@ -373,17 +372,10 @@ Use `--geturl` to check the constructed URL before a full run, or pass
 - **No DISPLAY found**: run under `xvfb-run -a` (see
   [Running unattended](#running-unattended-no-display)), or pass
   `--headless` (not recommended, reliably blocked by Dell).
-- **`--debug`** (or plain `--verbose` for just the progress lines, no
-  dumps) is your friend for anything else: it shows step-by-step `[+]`
-  progress and, for `--debug`, dumps a numbered screenshot + HTML file at
-  every stage, so you can see exactly what the browser saw. Normal runs
-  are quiet by default (just the result output). This is what turns the
-  chatter back on.
-
-## Full change history
-
-See `CHANGELOG.md` for the complete, versioned history of every feature,
-bug, and thing confirmed (or ruled out) by testing along the way.
+- **Anything else**: run with `--debug` (or `--verbose` for just the
+  progress lines). Normal runs are quiet; `--debug` shows step-by-step
+  `[+]` progress and dumps a numbered screenshot + HTML file at every
+  stage, so you can see exactly what the browser saw.
 
 ## License
 
