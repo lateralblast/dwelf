@@ -1043,3 +1043,34 @@ order they actually happened, each as its own version starting at 0.0.1.
 - Not testable here: `--engine firefox` (only Firefox Nightly is installed,
   no `geckodriver`).
 - No code change.
+
+## [0.6.5] - 2026-10-12
+
+- Retried the direct `servicetag/<tag>` URL with a new tag, `5JD9MP2`
+  (Dell PowerEdge R430/R530/T430 family): `python3 dwelf.py --servicetag
+  5JD9MP2 --type drivers --engine uc --no-cache --debug` loaded the direct
+  URL with no `Access Denied`, no Akamai challenge and no widget fallback,
+  and scraped 1 result for the default `BIOS` category (Dell Server BIOS
+  PowerEdge R430/R530/T430 Version 2.19.0, Urgent, `dl.dell.com` link).
+- So the direct URL works again after the 0.6.4 denial of `6JW6H73` and
+  `C2PZXZ3`; that denial was therefore not permanent for this IP. Whether
+  it was rate-based or time-limited is still unknown.
+- Not tested: other `--type` values, `--specs`, `--engine selenium`/`firefox`
+  for this tag, repeated runs.
+- No code change; version bump only.
+
+## [0.6.6] - 2026-10-12
+
+- `--specs` confirmed live on a second tag, `5JD9MP2` (PowerEdge T430):
+  `python3 dwelf.py --servicetag 5JD9MP2 --specs --engine uc --no-cache
+  --debug` loaded the direct `servicetag/<tag>` URL, drove the Product
+  Specifications drawer, downloaded `5JD9MP2.csv` (88 lines, columns
+  `Component,Part Number,Description,Quantity`) into
+  `~/.dwelf/cache/5JD9MP2/` and rendered it as a table. No Akamai denial or
+  widget fallback.
+- Observed: the CSV was saved to the cache directory even with
+  `--no-cache` (the download directory is the cache directory); not
+  investigated.
+- Not tested: `--engine selenium`/`firefox` for `--specs`, other product
+  lines.
+- No code change; version bump only.

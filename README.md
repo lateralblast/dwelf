@@ -8,7 +8,7 @@ given Dell product, by model name, a direct URL, or a service tag.
 
 ## Version
 
-**0.6.4**, see `CHANGELOG.md` for the complete, versioned history of every
+**0.6.6**, see `CHANGELOG.md` for the complete, versioned history of every
 feature, bug, and thing confirmed (or ruled out) by testing. This section
 is kept in sync with `__version__` in `dwelf.py`; run `python3 dwelf.py
 --version` to confirm what you actually have installed.

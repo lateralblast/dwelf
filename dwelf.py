@@ -131,7 +131,7 @@ import urllib.request
 from dataclasses import asdict, dataclass
 from typing import List, Optional
 
-__version__ = "0.6.4"
+__version__ = "0.6.6"
 __long_name__ = "Dell Website Equipment Link Finder"
 
 
