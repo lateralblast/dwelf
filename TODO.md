@@ -15,4 +15,4 @@ Status: `[ ]` open, `[~]` in progress, `[x]` done.
 - [x] Use the direct `servicetag/<tag>/<type>` URL for `--servicetag`/`--specs`, widget as fallback (0.6.3).
 - [x] Make `find_chrome_binary()` find Chrome on macOS (0.6.2).
 - [x] Fix the `EC.attribute_to_be` crash in `run_specs()` (0.6.1).
-- [x] Live-test `--engine attach` (0.5.3): `--servicetag C2PZXZ3 --specs` was still blocked by Akamai (0.5.4).
+- [x] Live-test `--engine attach` (0.5.3): `--servicetag C2P**** --specs` was still blocked by Akamai (0.5.4).

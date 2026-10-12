@@ -8,7 +8,7 @@ given Dell product, by model name, a direct URL, or a service tag.
 
 ## Version
 
-**0.6.6**, see `CHANGELOG.md` for the complete, versioned history of every
+**0.6.7**, see `CHANGELOG.md` for the complete, versioned history of every
 feature, bug, and thing confirmed (or ruled out) by testing. This section
 is kept in sync with `__version__` in `dwelf.py`; run `python3 dwelf.py
 --version` to confirm what you actually have installed.
@@ -115,6 +115,21 @@ Video (1)
 iDRAC with Lifecycle controller (2)
 ```
 
+Export a service tag's Product Specifications (saved as a `.csv` under
+`~/.dwelf/cache/<servicetag>/` and printed as a table; the service tag
+below is obfuscated and the output trimmed to a few rows):
+
+```
+❯ python3 dwelf.py --servicetag 5JD**** --specs
++--------------------------------------------------------------------------------------------------------+-------------+-----------------------------------------------------+----------+
+| Component                                                                                              | Part Number | Description                                         | Quantity |
++--------------------------------------------------------------------------------------------------------+-------------+-----------------------------------------------------+----------+
+| 370-ACNX : 16GB RDIMM, 2400MT/s, Dual Ran k, x8 Data Width                                             | HNDJ7       | Dual In-Line Memory Module,16GB,2400,2RX8,8G,DDR4,R | 2        |
+| 338-BJDL : Intel Xeon E5-2640 v4 2.4GHz,2 5M Cache,8.0GT/s QPI,Turbo,HT, 10C/20T (90W) Max Mem 2133MHz | 3JP2W       | Processor,E52640V4,2.4,25M,BDW,R0                   | 1        |
+| 385-BBHO : iDRAC8 Enterprise, integrated Dell Remote Access Controller,  Enterprise                    | 96PCR       | DPK,HWFI,KG,IDRAC8,13G                              | 1        |
++--------------------------------------------------------------------------------------------------------+-------------+-----------------------------------------------------+----------+
+```
+
 ## Why this isn't a simple `requests`/`curl` script
 
 Dell's support site renders its content client-side and fronts everything
@@ -174,7 +189,7 @@ default profile):
 
 ```bash
 google-chrome --remote-debugging-port=9222 --user-data-dir=$HOME/.dwelf/chrome-profile
-python3 dwelf.py --servicetag 1MJ4LG2 --specs --engine attach
+python3 dwelf.py --servicetag 1MJ**** --specs --engine attach
 ```
 
 `dwelf.py` opens its own window and closes only that window when done, never
@@ -221,8 +236,8 @@ python3 dwelf.py --model R630 --type manuals --search "release notes"   # post-f
 
 # Alternative ways to target a product
 python3 dwelf.py --url <a product's page URL> --category BIOS   # instead of --model
-python3 dwelf.py --servicetag 1MJ4LG2                            # resolve a real tag (intermittent, see below)
-python3 dwelf.py --servicetag 1MJ4LG2 --specs                    # export & cache Product Specifications (needs --servicetag)
+python3 dwelf.py --servicetag 1MJ****                            # resolve a real tag (intermittent, see below)
+python3 dwelf.py --servicetag 1MJ**** --specs                    # export & cache Product Specifications (needs --servicetag)
 python3 dwelf.py --geturl --model R630 --type manuals            # just print the constructed URL, no browser
 
 # Discovering valid values
@@ -243,6 +258,7 @@ python3 dwelf.py --model R630 --cache-dir /path/to/dir
 python3 dwelf.py --model R630 --output drivers.csv
 python3 dwelf.py --model R630 --display text                      # human-readable stdout instead of JSON
 python3 dwelf.py --model R630 --display table                     # ASCII table (needs: pip install terminaltables)
+python3 dwelf.py --servicetag 5JD**** --specs --obfuscate          # mask tags, serials, MACs, IPs, emails, phones in output
 python3 dwelf.py --model R630 --download                          # also fetch each file into $HOME/firmware/r630
 python3 dwelf.py --model R630 --download --directory /path/to/dir
 
@@ -278,7 +294,7 @@ just delete the relevant file (or the whole `~/.dwelf/cache` directory)
 to force a fresh scrape next time.
 
 `--specs` uses the same directory and the same `--servicetag` label for
-both, e.g. `~/.dwelf/cache/1MJ4LG2/1MJ4LG2.pdf`, following the same
+both, e.g. `~/.dwelf/cache/1MJ****/1MJ****.pdf`, following the same
 `--no-cache`/`--cache-dir` rules above.
 
 ## Flag reference
@@ -300,6 +316,7 @@ both, e.g. `~/.dwelf/cache/1MJ4LG2/1MJ4LG2.pdf`, following the same
 | `--search TEXT` | - | Post-filter: keep only results containing this string in any field. |
 | `--output FILE` | stdout | Write results to `.json` or `.csv` instead of printing. |
 | `--display {json,text,table}` | `json` | Stdout rendering format only. `--output` always writes JSON/CSV regardless. `table` needs `terminaltables`. |
+| `--obfuscate` | off | Mask service tags, serial numbers, MAC addresses, IP addresses, email addresses, phone numbers and labelled personal details (owner/contact/customer/address) in stdout and `--output`, and in `--specs`' table, keeping a short prefix (`5JD****`, `192.168.*.*`, `00:1A:2B:**:**:**`). Best-effort pattern matching: it can miss unlabelled values in free text, and a four-part firmware version can look like an IPv4 address (a leading `version`/`v` is skipped). Does not change stderr progress, `--debug` dumps, the cache or `--download` files. |
 | `--download` | off | Also fetch each result's linked file into `--directory`. |
 | `--directory DIR` | `$HOME/firmware/<model>` | Destination for `--download`. |
 | `--no-cache` | off | Always scrape live; don't read or write a cache file. See [Caching](#caching). |
@@ -344,13 +361,17 @@ Use `--geturl` to check the constructed URL before a full run, or pass
   with every engine tested (plain Selenium, `uc`, Firefox). Non-headless
   (including under Xvfb, which is a real render target, just off-screen)
   is the only confirmed-working mode.
-- **`--servicetag` is intermittent.** Its lookup hits a backend endpoint
-  Akamai protects separately and more aggressively than the pages
-  themselves. Most automated attempts get silently blocked with no
-  visible error; occasionally an interactive "I'm not a robot" challenge
-  appears instead, which `dwelf.py` attempts to solve automatically.
-  Switching `--engine` does not reliably help here (unlike for page
-  loading in general).
+- **`--servicetag` is mostly reliable via the direct URL, but not
+  guaranteed.** It first loads Dell's `servicetag/<tag>` URL directly,
+  which worked with `--engine uc` for two tags (`6JW****`, `5JD****`) with no challenge. Akamai
+  has also been seen denying that URL after many automated loads in a
+  short time (see `CHANGELOG.md` 0.6.4). When it is denied, `dwelf.py`
+  falls back to the lookup widget, which hits a backend endpoint Akamai
+  protects separately and more aggressively. Most attempts there are
+  silently blocked with no visible error; occasionally an interactive "I'm
+  not a robot" challenge appears instead, which `dwelf.py` attempts to
+  solve automatically. Switching `--engine` does not reliably help the
+  fallback.
 - **`--type articles`** returns at most 30 results for a signed-out
   session, even if more exist. Dell requires a Dell account to see more.
 - **`--type advisories`** only returns the "Security" tab; "Technical"
@@ -361,21 +382,15 @@ Use `--geturl` to check the constructed URL before a full run, or pass
   `www.dell.com` webpage (advisories, articles, some manuals, videos)
   will likely fail the same way plain `curl`/`requests` do against Dell's
   pages generally.
-- **`--specs` is not confirmed end-to-end live.** Everything up to a
-  resolved `--servicetag` is the same confirmed code path `--servicetag`
-  alone uses. "Product Specifications" opens a same-page drawer rather
-  than a new page (confirmed against a real resolved overview page's
-  saved HTML: `<a id="review-specs-drawer-trigger">` wired to a DDS
-  drawer, `id="review-specs-drawer"`), so the selectors for both it and
-  the drawer's own export control are grounded in real markup, not a
-  guess - but the drawer's content (including the export control) is
-  fetched only once opened, so it was never actually seen, live or
-  offline: Dell's Akamai bot protection blocked every further resolution
-  attempt in the same testing session, and loading the saved page
-  offline confirmed the click itself works but not the drawer's
-  JavaScript (which never ran offline). If it doesn't find the export
-  control, `--debug` and the resulting `dell_debug_specs_*.html` dumps
-  are the way to fix the selector.
+- **`--specs` is confirmed only with `--engine uc` on the direct
+  `servicetag/<tag>` URL.** It worked live for two tags (an OptiPlex 7080
+  and a PowerEdge T430), each exporting a `.csv` that is rendered as a
+  table. It has not been tested with `--engine selenium`/`firefox`, on
+  other product lines, or through the lookup-widget fallback (which Akamai
+  mostly blocks). Akamai has also been seen denying the direct URL after
+  many automated loads in a short time (see `CHANGELOG.md` 0.6.4). If the
+  drawer's export control is not found, `--debug` and the resulting
+  `dell_debug_specs_*.html` dumps are the way to fix the selector.
 
 ## Troubleshooting
 

@@ -87,8 +87,8 @@ Usage (runs with a visible Chrome window by default - see --headless below):
     python3 dwelf.py --model R630 --type advisories --impact High         # only High-impact advisories
     python3 dwelf.py --model R630 --type regulatory                       # Regulatory compliance documents
     python3 dwelf.py --model R630 --type manuals --search "release notes" # only results containing this text
-    python3 dwelf.py --servicetag 1MJ4LG2                                 # resolve a tag instead of guessing --model (intermittent, see below)
-    python3 dwelf.py --servicetag 1MJ4LG2 --specs                        # export and cache that tag's Product Specifications (needs --servicetag)
+    python3 dwelf.py --servicetag 1MJ****                                 # resolve a tag instead of guessing --model (intermittent, see below)
+    python3 dwelf.py --servicetag 1MJ**** --specs                        # export and cache that tag's Product Specifications (needs --servicetag)
     python3 dwelf.py --model R630 --category Firmware --os "Windows Server 2019 LTSC"
     python3 dwelf.py --model R630 --os none                               # leave Dell's default OS selection alone
     python3 dwelf.py --url <a product's drivers URL> --category BIOS      # instead of --model/--type
@@ -131,7 +131,7 @@ import urllib.request
 from dataclasses import asdict, dataclass
 from typing import List, Optional
 
-__version__ = "0.6.6"
+__version__ = "0.6.7"
 __long_name__ = "Dell Website Equipment Link Finder"
 
 
@@ -581,7 +581,7 @@ REGULATORY_ROW_SELECTOR = f"#{REGULATORY_CONTAINER_ID} div.dds__col--lg-12.dds__
 # SERVICE_TAG_BASE_SLUG itself, the URL never changes, so resolve_service_
 # tag_slug() falls back to checking whether the submitted tag has been
 # echoed back into the rendered page instead - confirmed necessary by
-# testing with a real tag (1MJ4LG2) that belongs to SERVICE_TAG_BASE_SLUG
+# testing with a real tag (1MJ****) that belongs to SERVICE_TAG_BASE_SLUG
 # (poweredge-r630) itself: Dell resolved it correctly within ~2 seconds,
 # but the URL-only check timed out 3/3 attempts regardless, since it never
 # saw a slug other than the starting one.
@@ -1956,7 +1956,7 @@ def run_list(
 def normalize_label(label: Optional[str], fallback: str = "product") -> str:
     """Turn a model name, service tag, or locale into a filesystem-safe
     path component: original case preserved (a service tag like
-    "1MJ4LG2" stays uppercase, matching how Dell itself displays it),
+    "1MJ****" stays uppercase, matching how Dell itself displays it),
     whitespace/hyphens collapsed to a single "-". Shared by
     default_download_directory() and the on-disk cache (see
     cache_file_path()) so a given --model/--servicetag always maps to the
@@ -2237,8 +2237,90 @@ def read_csv_rows(path: str) -> List[dict]:
         return list(csv.DictReader(f))
 
 
-def write_output(results: List, output: Optional[str], display: str = "json") -> None:
+# Sensitive-value patterns for --obfuscate. Each match keeps a short prefix
+# and replaces the rest with OBFUSCATION_MASK, the same style the docs use
+# for service tags ("5JD****"). Regex-based, so it is best-effort: it will
+# miss unlabelled serials or personal details in free text, and the IPv4
+# pattern can also match a four-part firmware version (a preceding
+# "version"/"ver"/"v" is skipped to limit that).
+OBFUSCATION_MASK = "****"
+OBFUSCATE_KEYS = ("serial", "owner", "contact", "customer", "email", "phone", "address")
+OBFUSCATE_LABELLED = re.compile(
+    r"(?i)\b(serial(?:\s*(?:number|no\.?|#))?|s/n|owner|contact|customer|e-?mail|phone|tel|address)(\s*[:=]\s*)([^\s,;|\"]+)"
+)
+OBFUSCATE_EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+OBFUSCATE_MAC = re.compile(r"(?<![0-9A-Fa-f:-])(?:[0-9A-Fa-f]{2}([:-])){5}[0-9A-Fa-f]{2}(?![0-9A-Fa-f:-])")
+OBFUSCATE_MAC_DOTTED = re.compile(r"\b[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4}\b")
+OBFUSCATE_IPV4 = re.compile(r"(?<![\d.])((?:\d{1,3}\.){3}\d{1,3})(?![\d.])")
+OBFUSCATE_IPV6 = re.compile(r"(?<![0-9A-Fa-f:])(?:[0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}(?![0-9A-Fa-f:])|(?<![0-9A-Fa-f:])(?:[0-9A-Fa-f]{1,4}:){1,6}:(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,5})?(?![0-9A-Fa-f:])")
+OBFUSCATE_PHONE = re.compile(r"(?<![\w.])(?:\+\d[\d\s().-]{7,}\d|\(?\d{2,4}\)?[\s.-]\d{3,4}[\s.-]\d{3,4})(?![\w.])")
+OBFUSCATE_URL_TAG = re.compile(r"(?i)(servicetag/)([0-9A-Z]{5,8})")
+
+
+def mask_value(value: str, keep: int = 3) -> str:
+    """Keep the first `keep` characters of `value` and mask the rest."""
+    return value[:keep] + OBFUSCATION_MASK
+
+
+def obfuscate_text(text: str, service_tag: Optional[str] = None) -> str:
+    """Return `text` with service tags, serial numbers, MAC addresses, IP
+    addresses, email addresses, phone numbers and labelled personal fields
+    (owner/contact/customer/address) masked. `service_tag` is the tag from
+    --servicetag; every occurrence of it is masked wherever it appears, in
+    addition to any tag in a `servicetag/<tag>` URL.
+    """
+    if not text:
+        return text
+    if service_tag:
+        text = re.sub(re.escape(service_tag), mask_value(service_tag), text, flags=re.IGNORECASE)
+    text = OBFUSCATE_URL_TAG.sub(lambda m: m.group(1) + mask_value(m.group(2)), text)
+    text = OBFUSCATE_LABELLED.sub(lambda m: m.group(1) + m.group(2) + mask_value(m.group(3)), text)
+    text = OBFUSCATE_EMAIL.sub(lambda m: mask_value(m.group(0)), text)
+    text = OBFUSCATE_MAC.sub(lambda m: m.group(0)[:8] + m.group(1) + "**" + m.group(1) + "**" + m.group(1) + "**", text)
+    text = OBFUSCATE_MAC_DOTTED.sub(lambda m: m.group(0)[:4] + ".****.****", text)
+    text = OBFUSCATE_IPV6.sub(lambda m: m.group(0).split(":")[0] + ":" + OBFUSCATION_MASK, text)
+
+    def mask_ipv4(m: "re.Match") -> str:
+        octets = m.group(1).split(".")
+        if any(int(o) > 255 for o in octets):
+            return m.group(0)
+        if re.search(r"(?i)(?:version|ver\.?|v)\s*$", text[max(0, m.start() - 10) : m.start()]):
+            return m.group(0)
+        return f"{octets[0]}.{octets[1]}.*.*"
+
+    text = OBFUSCATE_IPV4.sub(mask_ipv4, text)
+    return OBFUSCATE_PHONE.sub(lambda m: m.group(0)[:3] + OBFUSCATION_MASK, text)
+
+
+def obfuscate_rows(rows: List[dict], service_tag: Optional[str] = None) -> List[dict]:
+    """Apply obfuscate_text() to every string value in `rows`, and mask a
+    whole value outright when its column name is itself sensitive (serial,
+    owner, contact, customer, email, phone, address).
+    """
+    out = []
+    for row in rows:
+        new = {}
+        for key, value in row.items():
+            if value is None or not isinstance(value, str):
+                new[key] = value
+            elif any(k in str(key).lower() for k in OBFUSCATE_KEYS) and value:
+                new[key] = mask_value(value)
+            else:
+                new[key] = obfuscate_text(value, service_tag)
+        out.append(new)
+    return out
+
+
+def write_output(
+    results: List,
+    output: Optional[str],
+    display: str = "json",
+    obfuscate: bool = False,
+    service_tag: Optional[str] = None,
+) -> None:
     rows = [asdict(r) for r in results]
+    if obfuscate:
+        rows = obfuscate_rows(rows, service_tag)
     if not output:
         if display == "text":
             print(format_as_text(rows))
@@ -2389,6 +2471,15 @@ def main() -> None:
         "affects stdout - --output still always writes .json/.csv.",
     )
     parser.add_argument(
+        "--obfuscate",
+        action="store_true",
+        help="Mask service tags, serial numbers, MAC addresses, IP addresses, email addresses, phone "
+        "numbers and labelled personal details (owner/contact/customer/address) in the results printed "
+        "or written by --output, and in --specs' table, keeping a short prefix (e.g. 5JD****). "
+        "Best-effort pattern matching; stderr progress, --debug dumps, the cache and --download files "
+        "are not changed.",
+    )
+    parser.add_argument(
         "--download",
         action="store_true",
         help="Actually download each result's file into --directory, in addition to the usual JSON/CSV "
@@ -2484,9 +2575,11 @@ def main() -> None:
             sys.exit(1)
         rows = read_csv_rows(path) if path.endswith(".csv") else []
         if rows:
+            if args.obfuscate:
+                rows = obfuscate_rows(rows, args.servicetag)
             print(format_as_table(rows))
         else:
-            print(path)
+            print(obfuscate_text(path, args.servicetag) if args.obfuscate else path)
         sys.exit(0)
 
     os_filter = None if args.os_filter.lower() == "none" else args.os_filter
@@ -2572,7 +2665,7 @@ def main() -> None:
             print(f"No results contained '{args.search}'.", file=sys.stderr)
             sys.exit(1)
 
-    write_output(results, args.output, args.display)
+    write_output(results, args.output, args.display, obfuscate=args.obfuscate, service_tag=args.servicetag)
 
     if args.download:
         directory = args.directory or default_download_directory(args.model or args.servicetag)

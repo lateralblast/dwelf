@@ -641,7 +641,7 @@ order they actually happened, each as its own version starting at 0.0.1.
   always timing out) for a service tag that belongs to
   `SERVICE_TAG_BASE_SLUG` (`poweredge-r630`) itself - the exact gap the
   code comment above `SERVICE_TAG_INPUT_ID` already documented, now
-  confirmed happening in practice with a real tag (`1MJ4LG2`): a `--debug`
+  confirmed happening in practice with a real tag (`1MJ****`): a `--debug`
   screenshot showed Dell had resolved the tag to the correct product
   (title, Service Tag, and per-tag widgets all rendered) within about 2
   seconds of submitting, but the script kept polling for a URL slug other
@@ -660,7 +660,7 @@ order they actually happened, each as its own version starting at 0.0.1.
   mid-wait. Modeled on `try_solve_akamai_challenge()`: checks the
   top-level document, then every iframe, best-effort and non-fatal either
   way.
-- **Not fully re-confirmed end-to-end**: after these fixes, `1MJ4LG2` hit
+- **Not fully re-confirmed end-to-end**: after these fixes, `1MJ****` hit
   Akamai's silent block on every one of 6 further attempts in the same
   session (consistent with the already-documented "most attempts fail
   silently" behavior), so the new `document.body.innerText` resolution
@@ -730,7 +730,7 @@ order they actually happened, each as its own version starting at 0.0.1.
   is built from.
 - **Selectors confirmed against a real resolved overview page's saved
   HTML** (a user supplied a copy, since Dell's Akamai bot protection
-  blocked every further `1MJ4LG2` resolution attempt made while writing
+  blocked every further `1MJ****` resolution attempt made while writing
   this feature - see below): "Product Specifications" is
   `<a id="review-specs-drawer-trigger" href="javascript:void(0)">`,
   wired to a same-page DDS slide-out drawer (`id="review-specs-drawer"`,
@@ -754,7 +754,7 @@ order they actually happened, each as its own version starting at 0.0.1.
   validates the selector and the click, not the resulting drawer-open/
   export behavior. Getting to a resolved `--servicetag` at all remains
   the same code path confirmed working in 0.4.7, but Dell's Akamai bot
-  protection blocked every further `1MJ4LG2` resolution attempt made
+  protection blocked every further `1MJ****` resolution attempt made
   while writing this feature - most attempts timed out silently, and the
   ones that got as far as an "I'm not a robot" challenge kept
   re-presenting it repeatedly (confirmed by testing: the same challenge
@@ -792,7 +792,7 @@ order they actually happened, each as its own version starting at 0.0.1.
   on-disk cache directory, `--specs`'s `<servicetag>/specs.<ext>`, and
   `default_download_directory()`'s `$HOME/firmware/<model>`) no longer
   lowercases its input, only collapsing whitespace/hyphens. A service tag
-  like `1MJ4LG2` and a model like `R630` now keep their original case
+  like `1MJ****` and a model like `R630` now keep their original case
   everywhere on disk, matching how Dell itself displays them, instead of
   being written as `1mj4lg2`/`r630`. Existing lowercase cache directories
   on this machine (`~/.dwelf/cache/1mj4lg2` - empty, removed;
@@ -805,7 +805,7 @@ order they actually happened, each as its own version starting at 0.0.1.
 
 - `run_specs()` now saves an exported result as
   `<cache_dir>/<servicetag>/<servicetag>.<ext>` (e.g.
-  `1MJ4LG2/1MJ4LG2.csv`) instead of `<servicetag>/specs.<ext>`, and
+  `1MJ****/1MJ****.csv`) instead of `<servicetag>/specs.<ext>`, and
   `find_cached_specs()`'s glob was updated to match. Preference, not a
   bug: the servicetag directory already scopes the file, but having the
   tag in the filename itself matters when a file is copied out of that
@@ -855,7 +855,7 @@ order they actually happened, each as its own version starting at 0.0.1.
 
 ## [0.5.4] - `--engine attach` tested: still blocked for `--servicetag`
 
-- Ran `python3 dwelf.py --servicetag C2PZXZ3 --specs --engine attach` (user
+- Ran `python3 dwelf.py --servicetag C2P**** --specs --engine attach` (user
   run, attached to a hand-launched Chrome). Result: the same `Could not
   resolve service tag ... after 3 attempts` failure the other engines give.
   So a real, hand-launched Chrome over `--remote-debugging-port` does **not**
@@ -871,13 +871,13 @@ order they actually happened, each as its own version starting at 0.0.1.
 
 - Manual test, no `dwelf.py` code involved: drove the user's own logged-in
   Chrome through `bsk` (navigate to the PowerEdge R630 overview, `fill`
-  `#homemfe-dropdown-input` with `6JW6H73`, `click` `#btnSubmit_dep`).
+  `#homemfe-dropdown-input` with `6JW****`, `click` `#btnSubmit_dep`).
 - Result: Akamai's "I'm not a robot" checkbox challenge (`sec-cpt-if`)
   appeared on the first lookup, and the tag did not resolve for 24 s. So
   BrowserSkill does **not** avoid the challenge. Same behaviour as the
   other engines.
 - After the user ticked the checkbox and pressed Proceed by hand, Dell
-  resolved `6JW6H73` to an OptiPlex 7080 Micro (a "You are changing to"
+  resolved `6JW****` to an OptiPlex 7080 Micro (a "You are changing to"
   confirmation with the tag and an Express Service Code). One run, one tag.
 - Not tested: whether `bsk click` on the checkbox would pass, and whether a
   later lookup in the same real profile gets the challenge less often.
@@ -885,7 +885,7 @@ order they actually happened, each as its own version starting at 0.0.1.
 
 ## [0.5.6] - `bsk` repeat lookup: no challenge this time (checkbox click untested)
 
-- Repeated the 0.5.5 manual `bsk` test (new session, same tag `6JW6H73`)
+- Repeated the 0.5.5 manual `bsk` test (new session, same tag `6JW****`)
   shortly after the user had solved the checkbox by hand in that profile.
   This time the tag resolved straight away to the OptiPlex 7080 Micro
   "Change product" confirmation, with **no** Akamai challenge shown.
@@ -897,7 +897,7 @@ order they actually happened, each as its own version starting at 0.0.1.
 ## [0.5.7] - `bsk` in a clean profile: scripted checkbox click passed
 
 - Clean Chrome profile (`dwelf-test`, no sign-in, BrowserSkill extension
-  only), driven with `bsk`, tag `6JW6H73`, no human interaction with the
+  only), driven with `bsk`, tag `6JW****`, no human interaction with the
   challenge. First submit: spinner for ~60 s, no result and no visible
   challenge (the silent block). Second submit (page reloaded and tag
   re-entered): Akamai's challenge iframes (`sec-text-if`, `sec-cpt-if`) appeared.
@@ -915,12 +915,12 @@ order they actually happened, each as its own version starting at 0.0.1.
 ## [0.5.8] - Direct `servicetag/<tag>` URLs skip the lookup widget (via `bsk`)
 
 - Never tried before: Dell's service-tag URL form. Loading
-  `https://www.dell.com/support/home/en-au/product-support/servicetag/6JW6H73/overview`
+  `https://www.dell.com/support/home/en-au/product-support/servicetag/6JW****/overview`
   in a real Chrome (driven by `bsk`, `dwelf-test` profile) redirected to
-  `.../support/product-details/en-au/servicetag/6JW6H73/overview` and
+  `.../support/product-details/en-au/servicetag/6JW****/overview` and
   rendered "Support for OptiPlex 7080 Micro" directly: no lookup widget, no
   silent first-submit failure, no Akamai challenge.
-- The same form works per page type: `.../servicetag/6JW6H73/drivers` loaded
+- The same form works per page type: `.../servicetag/6JW****/drivers` loaded
   "Drivers & Downloads" with result rows present. So `--servicetag` may not
   need to resolve a `/product/<slug>` at all.
 - The page did not expose a `/product/<slug>` link, so the slug itself is
@@ -934,11 +934,11 @@ order they actually happened, each as its own version starting at 0.0.1.
 ## [0.5.9] - Direct `servicetag/<tag>` URL confirmed with `dwelf.py`'s own engines
 
 - Tested in fresh automated browsers (no `bsk`, no prior human solve),
-  tag `6JW6H73`: `--engine uc` and `--engine selenium` both loaded
-  `.../en-au/servicetag/6JW6H73/overview` as "Support for OptiPlex 7080
+  tag `6JW****`: `--engine uc` and `--engine selenium` both loaded
+  `.../en-au/servicetag/6JW****/overview` as "Support for OptiPlex 7080
   Micro" with no Akamai challenge and no lookup widget.
 - End to end with no code change: `python3 dwelf.py --url
-  "https://www.dell.com/support/product-details/en-au/servicetag/6JW6H73/drivers"
+  "https://www.dell.com/support/product-details/en-au/servicetag/6JW****/drivers"
   --engine uc --no-cache --category BIOS` scraped the real result (Dell
   OptiPlex 7080 System BIOS, Critical, `dl.dell.com` link). The existing
   row scraping and filters work unchanged on this URL form.
@@ -953,11 +953,11 @@ order they actually happened, each as its own version starting at 0.0.1.
 
 - First live confirmation of the `--specs` export flow: with the service-tag
   lookup replaced by loading
-  `https://www.dell.com/support/product-details/en-au/servicetag/6JW6H73/overview`
+  `https://www.dell.com/support/product-details/en-au/servicetag/6JW****/overview`
   (throwaway script reusing `run_specs()`'s own helpers and selectors, `--engine uc`,
   fresh automated browser), `#review-specs-drawer-trigger` was found and
   clicked, `#review-specs-drawer` reported `aria-hidden="false"`, the
-  `Export` link was clicked, and `6JW6H73.csv` (125 data rows: Component,
+  `Export` link was clicked, and `6JW****.csv` (125 data rows: Component,
   Part Number, Description, Quantity) was downloaded. No Akamai challenge
   at any point.
 - This also confirms the drawer's open state *is* signalled by
@@ -1002,10 +1002,10 @@ order they actually happened, each as its own version starting at 0.0.1.
   does not stay on that tag's URL (or lands on an "Access Denied" page) it
   falls back to the old `resolve_service_tag_slug()` path unchanged.
 - Confirmed live through the real CLI, `--engine uc`, fresh automated
-  browser, tag `6JW6H73`, no Akamai challenge and no fallback triggered:
+  browser, tag `6JW****`, no Akamai challenge and no fallback triggered:
   `--type drivers --category BIOS` (1 result, the OptiPlex 7080 System
   BIOS), `--type manuals` (OptiPlex 7080 Micro manuals), and `--specs`
-  (saved `6JW6H73.csv`).
+  (saved `6JW****.csv`).
 - Not tested: `--engine selenium`/`firefox` through the CLI, other tags or
   product lines, the remaining `--type` values (`articles`, `videos`,
   `advisories`, `regulatory`; the URL is built the same way), or the
@@ -1014,7 +1014,7 @@ order they actually happened, each as its own version starting at 0.0.1.
 
 ## [0.6.4] - Wider testing of the direct `servicetag/<tag>` URL: works, then Akamai starts denying it
 
-- Through the CLI, `--servicetag 6JW6H73` on the direct URL, `--engine uc`:
+- Through the CLI, `--servicetag 6JW****` on the direct URL, `--engine uc`:
   `--type regulatory` returned 7 documents, `--type videos` 18, and
   `--type articles` / `--type advisories` returned 0 (articles also 0 on the
   old `/product/optiplex-7080-micro/` URL, so that is Dell's data, not the
@@ -1024,12 +1024,12 @@ order they actually happened, each as its own version starting at 0.0.1.
   not found`: seen on service-tag videos (2 of 3 runs) and on the old
   slug URL for advisories (1 run), so it is not caused by the new URL.
   Cause not investigated. Re-running usually works.
-- **Not reliable:** later in the same session, `--servicetag C2PZXZ3 --type
+- **Not reliable:** later in the same session, `--servicetag C2P**** --type
   drivers --engine selenium` fell back to the widget (the direct URL
   returned Akamai's `Access Denied`, "Reference #18") and then failed
   resolving through the widget as before. A probe showed `Access Denied` on
-  the direct URL for `C2PZXZ3` with both `selenium` and `uc`, and then for
-  `6JW6H73` too (which had worked an hour earlier). The old
+  the direct URL for `C2P****` with both `selenium` and `uc`, and then for
+  `6JW****` too (which had worked an hour earlier). The old
   `/product/optiplex-7080-micro/resources/manuals` URL still loaded 8
   manuals from the same machine at the same time.
 - Reading: after roughly 20 automated loads in about an hour, Akamai began
@@ -1038,7 +1038,7 @@ order they actually happened, each as its own version starting at 0.0.1.
   or specific to that path is **unknown**; no retry/backoff was tried. So
   the direct URL is a likely fast path, not a guaranteed fix.
 - The widget fallback was exercised and behaves as before: a bad tag
-  (`ZZZZZZ9`) and the denied `C2PZXZ3` both fell back and failed after 3
+  (`ZZZZZZ9`) and the denied `C2P****` both fell back and failed after 3
   attempts with the existing error message.
 - Not testable here: `--engine firefox` (only Firefox Nightly is installed,
   no `geckodriver`).
@@ -1046,14 +1046,14 @@ order they actually happened, each as its own version starting at 0.0.1.
 
 ## [0.6.5] - 2026-10-12
 
-- Retried the direct `servicetag/<tag>` URL with a new tag, `5JD9MP2`
+- Retried the direct `servicetag/<tag>` URL with a new tag, `5JD****`
   (Dell PowerEdge R430/R530/T430 family): `python3 dwelf.py --servicetag
-  5JD9MP2 --type drivers --engine uc --no-cache --debug` loaded the direct
+  5JD**** --type drivers --engine uc --no-cache --debug` loaded the direct
   URL with no `Access Denied`, no Akamai challenge and no widget fallback,
   and scraped 1 result for the default `BIOS` category (Dell Server BIOS
   PowerEdge R430/R530/T430 Version 2.19.0, Urgent, `dl.dell.com` link).
-- So the direct URL works again after the 0.6.4 denial of `6JW6H73` and
-  `C2PZXZ3`; that denial was therefore not permanent for this IP. Whether
+- So the direct URL works again after the 0.6.4 denial of `6JW****` and
+  `C2P****`; that denial was therefore not permanent for this IP. Whether
   it was rate-based or time-limited is still unknown.
 - Not tested: other `--type` values, `--specs`, `--engine selenium`/`firefox`
   for this tag, repeated runs.
@@ -1061,12 +1061,12 @@ order they actually happened, each as its own version starting at 0.0.1.
 
 ## [0.6.6] - 2026-10-12
 
-- `--specs` confirmed live on a second tag, `5JD9MP2` (PowerEdge T430):
-  `python3 dwelf.py --servicetag 5JD9MP2 --specs --engine uc --no-cache
+- `--specs` confirmed live on a second tag, `5JD****` (PowerEdge T430):
+  `python3 dwelf.py --servicetag 5JD**** --specs --engine uc --no-cache
   --debug` loaded the direct `servicetag/<tag>` URL, drove the Product
-  Specifications drawer, downloaded `5JD9MP2.csv` (88 lines, columns
+  Specifications drawer, downloaded `5JD****.csv` (88 lines, columns
   `Component,Part Number,Description,Quantity`) into
-  `~/.dwelf/cache/5JD9MP2/` and rendered it as a table. No Akamai denial or
+  `~/.dwelf/cache/5JD****/` and rendered it as a table. No Akamai denial or
   widget fallback.
 - Observed: the CSV was saved to the cache directory even with
   `--no-cache` (the download directory is the cache directory); not
@@ -1074,3 +1074,25 @@ order they actually happened, each as its own version starting at 0.0.1.
 - Not tested: `--engine selenium`/`firefox` for `--specs`, other product
   lines.
 - No code change; version bump only.
+
+## [0.6.7] - 2026-10-12
+
+### Added
+
+- `--obfuscate`: masks service tags, serial numbers, MAC addresses, IPv4/IPv6
+  addresses, email addresses, phone numbers and labelled personal details
+  (`owner`, `contact`, `customer`, `address`) in the results printed to
+  stdout, written by `--output`, and in the `--specs` table, keeping a short
+  prefix (`5JD****`, `192.168.*.*`, `00:1A:2B:**:**:**`). A column whose name
+  is itself sensitive (e.g. `Serial Number`) is masked whole.
+- Tested with a small set of sample strings (labelled serial, colon and
+  dotted MACs, IPv4/IPv6, email, phone, a `servicetag/<tag>` URL) and by
+  running `--servicetag 5JD**** --specs --obfuscate` from the cache: the
+  specs table printed unchanged, since Dell's specs export contains none of
+  these values.
+- Limits: best-effort regex matching, so unlabelled serials or personal
+  details in free text are not caught, and a four-part firmware version
+  could look like an IPv4 address (a leading `version`/`v` is skipped).
+  Not run against a real scrape result that contains such values. stderr
+  progress, `--debug` dumps, the cache and `--download` files are not
+  obfuscated.
