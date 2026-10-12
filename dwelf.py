@@ -98,6 +98,7 @@ Usage (runs with a visible Chrome window by default - see --headless below):
     python3 dwelf.py --debug                                              # progress plus screenshots/HTML dumped at each step
     python3 dwelf.py --headless                                           # blocked by Dell's bot protection; kept for completeness
     python3 dwelf.py --engine uc                                          # undetected-chromedriver backend instead of plain Selenium
+    python3 dwelf.py --engine attach --debugger-address 127.0.0.1:9222    # drive your own already-running Chrome (unconfirmed)
     python3 dwelf.py --engine firefox                                     # Firefox instead of Chrome - confirmed more reliable (see above)
     python3 dwelf.py --model R630 --no-cache                              # always scrape live; don't read/write a cache file
     python3 dwelf.py --model R630 --cache-dir /path/to/dir                # cache location (default: $HOME/.dwelf/cache)
@@ -130,7 +131,7 @@ import urllib.request
 from dataclasses import asdict, dataclass
 from typing import List, Optional
 
-__version__ = "0.5.2"
+__version__ = "0.6.4"
 __long_name__ = "Dell Website Equipment Link Finder"
 
 
@@ -217,6 +218,12 @@ CHROME_BINARY_CANDIDATES = [
     "chromium",
     "chromium-browser",
     "chrome",
+]
+
+# Chrome is not on PATH on macOS; its binary lives inside the app bundle.
+CHROME_MACOS_PATHS = [
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
 ]
 
 FIREFOX_BINARY_CANDIDATES = ["firefox", "firefox-esr", "firefox-developer-edition"]
@@ -396,6 +403,35 @@ def normalize_model_slug(model: str) -> str:
     if slug.split("-", 1)[0] not in KNOWN_PRODUCT_LINES:
         slug = f"poweredge-{slug}"
     return slug
+
+
+def build_service_tag_url(service_tag: str, page_type: str = "overview", locale: str = DEFAULT_LOCALE) -> str:
+    """Dell's direct service-tag URL for `page_type` ("overview" or a
+    TYPE_URL_TEMPLATES key): same suffix as the /product/<slug>/ form but
+    under /servicetag/<tag>/, which loads the product's page without the
+    lookup widget (confirmed by testing in 0.5.8-0.6.0; see CHANGELOG.md).
+    """
+    if page_type == "overview":
+        suffix = "overview"
+    else:
+        template = TYPE_URL_TEMPLATES[TYPE_ALIASES.get(page_type, page_type)]
+        suffix = template.split("/product/{slug}/", 1)[1]
+    return f"https://www.dell.com/support/product-details/{locale}/servicetag/{service_tag}/{suffix}"
+
+
+def open_service_tag_page(driver, service_tag: str, page_type: str, locale: str) -> bool:
+    """Load the direct service-tag URL. True if it stayed on that tag's page
+    (so the caller can skip resolve_service_tag_slug), False if Dell sent us
+    elsewhere or blocked it, in which case the caller falls back to the
+    lookup widget.
+    """
+    url = build_service_tag_url(service_tag, page_type, locale)
+    progress(f"Opening {url}")
+    try:
+        driver.get(url)
+    except Exception:
+        return False
+    return f"/servicetag/{service_tag}".lower() in driver.current_url.lower() and "access denied" not in driver.title.lower()
 
 
 def build_product_url(model: str, type_: str = DEFAULT_TYPE, locale: str = DEFAULT_LOCALE) -> str:
@@ -614,6 +650,9 @@ def find_chrome_binary() -> Optional[str]:
         path = shutil.which(name)
         if path:
             return path
+    for path in CHROME_MACOS_PATHS:
+        if os.path.exists(path):
+            return path
     return None
 
 
@@ -638,6 +677,10 @@ def check_display_available(headless: bool) -> None:
         "    xvfb-run -a python3 dwelf.py ...\n"
         "(--headless is available but not recommended - it gets blocked by Dell's site)"
     )
+
+
+DEFAULT_DEBUGGER_ADDRESS = "127.0.0.1:9222"
+_DEBUGGER_ADDRESS = DEFAULT_DEBUGGER_ADDRESS
 
 
 def build_driver(
@@ -686,6 +729,50 @@ def build_driver(
     if download_dir:
         driver.execute_cdp_cmd("Page.setDownloadBehavior", {"behavior": "allow", "downloadPath": download_dir})
     driver.set_page_load_timeout(60)
+    return driver
+
+
+def build_driver_attach(download_dir: Optional[str] = None) -> webdriver.Chrome:
+    """--engine attach: drive a Chrome you already launched yourself with
+    --remote-debugging-port (see --debugger-address), instead of starting a
+    fresh automated one. A real, hand-launched profile carries none of the
+    fresh-profile/automation-flag fingerprints the other engines do.
+    UNCONFIRMED against Akamai - see CHANGELOG.md 0.5.3.
+
+    Launch Chrome first, with a non-default profile directory (Chrome 136+
+    ignores the debugging port on the default profile), e.g.:
+        google-chrome --remote-debugging-port=9222 --user-data-dir=$HOME/.dwelf/chrome-profile
+    The script works in its own new window and, on quit(), closes only that
+    window - never your browser.
+    """
+    options = Options()
+    options.add_experimental_option("debuggerAddress", _DEBUGGER_ADDRESS)
+    try:
+        driver = webdriver.Chrome(options=options)
+    except Exception as e:
+        raise RuntimeError(
+            f"Could not attach to Chrome at {_DEBUGGER_ADDRESS}: {str(e).splitlines()[0]}\n"
+            "Start Chrome first with --remote-debugging-port=<port> and a non-default "
+            "--user-data-dir, then pass --debugger-address host:port if it isn't "
+            f"{DEFAULT_DEBUGGER_ADDRESS}."
+        ) from e
+    driver.switch_to.new_window("window")
+    if download_dir:
+        driver.execute_cdp_cmd("Page.setDownloadBehavior", {"behavior": "allow", "downloadPath": download_dir})
+    driver.set_page_load_timeout(60)
+
+    def quit_own_window_only() -> None:
+        # webdriver's normal quit() would close the user's whole browser.
+        try:
+            driver.close()
+        except Exception:
+            pass
+        try:
+            driver.service.stop()
+        except Exception:
+            pass
+
+    driver.quit = quit_own_window_only
     return driver
 
 
@@ -1351,8 +1438,14 @@ def run_specs(
 
     driver = build_any_driver(engine, headless, chrome_binary, firefox_binary, geckodriver_binary, download_dir=label_dir)
     try:
-        slug = resolve_service_tag_slug(driver, service_tag, locale, debug=debug)
-        progress(f"Resolved to '{slug}'; opening the Product Specifications drawer...")
+        if open_service_tag_page(driver, service_tag, "overview", locale):
+            dismiss_cookie_banner(driver, WebDriverWait(driver, 8))
+            dismiss_feedback_popup(driver)
+            progress("Opened the service tag's page directly; opening the Product Specifications drawer...")
+        else:
+            progress("Direct service tag URL did not work; falling back to the lookup widget")
+            slug = resolve_service_tag_slug(driver, service_tag, locale, debug=debug)
+            progress(f"Resolved to '{slug}'; opening the Product Specifications drawer...")
 
         trigger = click_first_visible(driver, By.ID, PRODUCT_SPECIFICATIONS_TRIGGER_ID, timeout=15)
         if not trigger:
@@ -1370,12 +1463,12 @@ def run_specs(
         # closed-state aria-hidden="true" is confirmed from the saved
         # page's markup; the flip to "false" on open is inferred from
         # standard DDS/ARIA drawer behavior and the ddsDrawerOpenEvent it
-        # fires, not observed live - if this turns out wrong, the fallback
+        # fires; confirmed live in 0.6.0 - if this turns out wrong, the fallback
         # below still gives click_link_by_text() a chance once content has
         # had time to render regardless.
         try:
             WebDriverWait(driver, 15).until(
-                EC.attribute_to_be((By.ID, PRODUCT_SPECIFICATIONS_DRAWER_ID), "aria-hidden", "false")
+                lambda d: d.find_element(By.ID, PRODUCT_SPECIFICATIONS_DRAWER_ID).get_attribute("aria-hidden") == "false"
             )
         except TimeoutException:
             progress(f"'#{PRODUCT_SPECIFICATIONS_DRAWER_ID}' never reported open; looking for the export control anyway")
@@ -1806,6 +1899,8 @@ def build_any_driver(
     (--specs only) makes the browser save a download straight to that
     directory instead of prompting or opening it inline.
     """
+    if engine == "attach":
+        return build_driver_attach(download_dir=download_dir)
     if engine == "uc":
         return build_driver_uc(headless=headless, chrome_binary=chrome_binary, download_dir=download_dir)
     elif engine == "firefox":
@@ -1979,12 +2074,18 @@ def run_scrape(
     driver = build_any_driver(engine, headless, chrome_binary, firefox_binary, geckodriver_binary)
     wait = WebDriverWait(driver, 15)
     try:
+        already_loaded = False
         if service_tag:
-            slug = resolve_service_tag_slug(driver, service_tag, locale, debug=debug)
-            url = TYPE_URL_TEMPLATES[page_type].format(slug=slug, locale=locale)
+            if open_service_tag_page(driver, service_tag, page_type, locale):
+                already_loaded = True
+            else:
+                progress("Direct service tag URL did not work; falling back to the lookup widget")
+                slug = resolve_service_tag_slug(driver, service_tag, locale, debug=debug)
+                url = TYPE_URL_TEMPLATES[page_type].format(slug=slug, locale=locale)
 
-        progress(f"Opening {url}")
-        driver.get(url)
+        if not already_loaded:
+            progress(f"Opening {url}")
+            driver.get(url)
         if debug:
             save_debug_artifacts(driver, "dell_debug_01_loaded")
 
@@ -2324,7 +2425,7 @@ def main() -> None:
     parser.add_argument("--geckodriver-binary", help="Path to a geckodriver binary, if auto-detection fails")
     parser.add_argument(
         "--engine",
-        choices=["selenium", "uc", "firefox"],
+        choices=["selenium", "uc", "firefox", "attach"],
         default="uc",
         help="Browser automation backend (default: uc). 'uc' uses undetected-chromedriver, "
         "which patches the chromedriver binary itself instead of just setting Selenium options - "
@@ -2332,11 +2433,22 @@ def main() -> None:
         "'selenium' is plain Selenium/Chrome, no extra dependency. "
         "'firefox' uses Firefox instead of Chrome entirely - confirmed by testing to get through on a "
         "URL that was blocking Chrome (both other engines) outright in the same environment; needs a "
-        "non-snap Firefox + geckodriver (see --firefox-binary).",
+        "non-snap Firefox + geckodriver (see --firefox-binary). "
+        "'attach' drives a Chrome you launched yourself with --remote-debugging-port "
+        "(see --debugger-address) - unconfirmed against Akamai.",
+    )
+    parser.add_argument(
+        "--debugger-address",
+        default=DEFAULT_DEBUGGER_ADDRESS,
+        help=f"host:port of an already-running Chrome's remote debugging port, for --engine attach "
+        f"(default: {DEFAULT_DEBUGGER_ADDRESS}). Start Chrome with --remote-debugging-port=<port> "
+        "and a non-default --user-data-dir.",
     )
     args = parser.parse_args()
     global _VERBOSE_ENABLED
     _VERBOSE_ENABLED = args.verbose or args.debug
+    global _DEBUGGER_ADDRESS
+    _DEBUGGER_ADDRESS = args.debugger_address
 
     if args.checkconfig:
         sys.exit(0 if check_requirements() else 1)
@@ -2406,16 +2518,20 @@ def main() -> None:
                 file=sys.stderr,
             )
             sys.exit(1)
-        labels = run_list(
-            args.list_target,
-            list_url,
-            locale=args.locale,
-            headless=args.headless,
-            chrome_binary=args.chrome_binary,
-            engine=args.engine,
-            firefox_binary=args.firefox_binary,
-            geckodriver_binary=args.geckodriver_binary,
-        )
+        try:
+            labels = run_list(
+                args.list_target,
+                list_url,
+                locale=args.locale,
+                headless=args.headless,
+                chrome_binary=args.chrome_binary,
+                engine=args.engine,
+                firefox_binary=args.firefox_binary,
+                geckodriver_binary=args.geckodriver_binary,
+            )
+        except RuntimeError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
         print("\n".join(labels))
         sys.exit(0)
 

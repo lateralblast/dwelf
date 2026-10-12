@@ -829,3 +829,217 @@ order they actually happened, each as its own version starting at 0.0.1.
 - `--type articles` returns at most 30 results for a signed-out session
   even if more exist.
 - `--type advisories` only returns the "Security" tab.
+
+## [0.5.3] - `--engine attach` / `--debugger-address` (unconfirmed)
+
+- Added `--engine attach`, which drives a Chrome you launched yourself with
+  `--remote-debugging-port` (Selenium `debuggerAddress`) instead of starting
+  a fresh automated one, plus `--debugger-address HOST:PORT` (default
+  `127.0.0.1:9222`). Motivation: `--servicetag` resolution and `--specs`
+  were still blocked by Akamai in headed mode on every other engine, and a
+  real, hand-launched profile avoids the fresh-profile/automation-flag
+  fingerprints. Never tried before this version (no earlier entry mentions
+  attaching to a running browser).
+- `dwelf.py` opens its own window in the attached browser and `quit()`
+  closes only that window, never the user's browser. The Chrome must use a
+  non-default `--user-data-dir` (Chrome 136+ ignores the debugging port on
+  the default profile).
+- **Unconfirmed:** not yet tested against Dell's real site. CDP is still in
+  use, so some tells may remain.
+- `--list categories`/`os` now prints a one-line `Error:` and exits 1 when
+  the browser can't be built (previously a raw traceback), which `--engine
+  attach` hits whenever no Chrome is listening on `--debugger-address`.
+  Verified: with nothing listening, the error names the address and the
+  launch command. The attach itself has not been tested against a running
+  Chrome.
+
+## [0.5.4] - `--engine attach` tested: still blocked for `--servicetag`
+
+- Ran `python3 dwelf.py --servicetag C2PZXZ3 --specs --engine attach` (user
+  run, attached to a hand-launched Chrome). Result: the same `Could not
+  resolve service tag ... after 3 attempts` failure the other engines give.
+  So a real, hand-launched Chrome over `--remote-debugging-port` does **not**
+  reliably get past Akamai's service-tag lookup block.
+- Limits of this result: one run, one tag, three attempts. Not recorded
+  whether the profile was fresh or long-used, or whether any attempt showed
+  the checkbox challenge. Treat as "no evidence it helps", not proof it
+  never can.
+- `--engine attach` is kept (it works and closes only its own window), but
+  the README no longer presents it as a likely fix.
+
+## [0.5.5] - Tried Tencent BrowserSkill (`bsk` 0.3.2) for `--servicetag`
+
+- Manual test, no `dwelf.py` code involved: drove the user's own logged-in
+  Chrome through `bsk` (navigate to the PowerEdge R630 overview, `fill`
+  `#homemfe-dropdown-input` with `6JW6H73`, `click` `#btnSubmit_dep`).
+- Result: Akamai's "I'm not a robot" checkbox challenge (`sec-cpt-if`)
+  appeared on the first lookup, and the tag did not resolve for 24 s. So
+  BrowserSkill does **not** avoid the challenge. Same behaviour as the
+  other engines.
+- After the user ticked the checkbox and pressed Proceed by hand, Dell
+  resolved `6JW6H73` to an OptiPlex 7080 Micro (a "You are changing to"
+  confirmation with the tag and an Express Service Code). One run, one tag.
+- Not tested: whether `bsk click` on the checkbox would pass, and whether a
+  later lookup in the same real profile gets the challenge less often.
+  No `bsk` engine added.
+
+## [0.5.6] - `bsk` repeat lookup: no challenge this time (checkbox click untested)
+
+- Repeated the 0.5.5 manual `bsk` test (new session, same tag `6JW6H73`)
+  shortly after the user had solved the checkbox by hand in that profile.
+  This time the tag resolved straight away to the OptiPlex 7080 Micro
+  "Change product" confirmation, with **no** Akamai challenge shown.
+- So whether a scripted `bsk click` on the checkbox passes is still
+  untested: no challenge appeared to click. A plausible, unproven reading
+  is that the earlier human solve left the profile trusted for a while.
+- Both runs used the user's own logged-in Chrome. No `dwelf.py` code change.
+
+## [0.5.7] - `bsk` in a clean profile: scripted checkbox click passed
+
+- Clean Chrome profile (`dwelf-test`, no sign-in, BrowserSkill extension
+  only), driven with `bsk`, tag `6JW6H73`, no human interaction with the
+  challenge. First submit: spinner for ~60 s, no result and no visible
+  challenge (the silent block). Second submit (page reloaded and tag
+  re-entered): Akamai's challenge iframes (`sec-text-if`, `sec-cpt-if`) appeared.
+- `bsk snapshot` listed the checkbox (`@e1`, "I'm not a robot") and
+  Proceed (`@e2`) inside the iframe; plain CSS selectors did not match
+  through the iframe, but `bsk click @e1` then `bsk click @e2` did. The
+  challenge cleared and the tag resolved to the OptiPlex 7080 Micro
+  "Change product" confirmation.
+- So a scripted click through BrowserSkill passes the checkbox in a clean
+  real profile. Limits: one run, one tag; the checkbox still read
+  `[unchecked]` in the snapshot after the click, so it is the Proceed click
+  that visibly cleared it; first-attempt silent block still happened.
+- No `bsk` engine added yet; this only shows it is viable.
+
+## [0.5.8] - Direct `servicetag/<tag>` URLs skip the lookup widget (via `bsk`)
+
+- Never tried before: Dell's service-tag URL form. Loading
+  `https://www.dell.com/support/home/en-au/product-support/servicetag/6JW6H73/overview`
+  in a real Chrome (driven by `bsk`, `dwelf-test` profile) redirected to
+  `.../support/product-details/en-au/servicetag/6JW6H73/overview` and
+  rendered "Support for OptiPlex 7080 Micro" directly: no lookup widget, no
+  silent first-submit failure, no Akamai challenge.
+- The same form works per page type: `.../servicetag/6JW6H73/drivers` loaded
+  "Drivers & Downloads" with result rows present. So `--servicetag` may not
+  need to resolve a `/product/<slug>` at all.
+- The page did not expose a `/product/<slug>` link, so the slug itself is
+  not recoverable from it this way.
+- Plain HTTP is still blocked: `curl` to the same URL returns `403`. A real
+  browser is still required.
+- Limits: one tag, tested in a profile that had already solved a challenge
+  earlier the same day, so it may be benefiting from trust. Not yet tested
+  in a fresh profile or from `dwelf.py`'s own engines. No code change yet.
+
+## [0.5.9] - Direct `servicetag/<tag>` URL confirmed with `dwelf.py`'s own engines
+
+- Tested in fresh automated browsers (no `bsk`, no prior human solve),
+  tag `6JW6H73`: `--engine uc` and `--engine selenium` both loaded
+  `.../en-au/servicetag/6JW6H73/overview` as "Support for OptiPlex 7080
+  Micro" with no Akamai challenge and no lookup widget.
+- End to end with no code change: `python3 dwelf.py --url
+  "https://www.dell.com/support/product-details/en-au/servicetag/6JW6H73/drivers"
+  --engine uc --no-cache --category BIOS` scraped the real result (Dell
+  OptiPlex 7080 System BIOS, Critical, `dl.dell.com` link). The existing
+  row scraping and filters work unchanged on this URL form.
+- Not tested: `--engine firefox`, other tags/product lines, other `--type`
+  values, `--specs`, or repeated runs (one run per engine).
+- Found along the way: `find_chrome_binary()` does not look in macOS
+  locations, so on macOS `--chrome-binary "/Applications/Google
+  Chrome.app/Contents/MacOS/Google Chrome"` was needed for `uc`/`selenium`.
+  Not fixed here.
+
+## [0.6.0] - `--specs` flow confirmed on the direct `servicetag/<tag>` URL; found a crash in `run_specs()`
+
+- First live confirmation of the `--specs` export flow: with the service-tag
+  lookup replaced by loading
+  `https://www.dell.com/support/product-details/en-au/servicetag/6JW6H73/overview`
+  (throwaway script reusing `run_specs()`'s own helpers and selectors, `--engine uc`,
+  fresh automated browser), `#review-specs-drawer-trigger` was found and
+  clicked, `#review-specs-drawer` reported `aria-hidden="false"`, the
+  `Export` link was clicked, and `6JW6H73.csv` (125 data rows: Component,
+  Part Number, Description, Quantity) was downloaded. No Akamai challenge
+  at any point.
+- This also confirms the drawer's open state *is* signalled by
+  `aria-hidden` flipping to `"false"`, which `run_specs()`'s comment had
+  only inferred.
+- **Bug found, not yet fixed:** `run_specs()` (`dwelf.py`, the
+  `WebDriverWait(...).until(EC.attribute_to_be(...))` call) uses
+  `EC.attribute_to_be`, which does not exist in Selenium (4.49.0 here has
+  only `element_attribute_to_include` and
+  `text_to_be_present_in_element_attribute`). It raises `AttributeError`,
+  which the surrounding `except TimeoutException` does not catch, so
+  `--specs` crashes at that step whenever it is reached. The test used an
+  equivalent lambda condition instead.
+- Limits: one tag, `uc` only; `run_specs()` itself was not modified, so
+  `--specs --servicetag` still uses the widget path and has the crash above.
+
+## [0.6.1] - Fixed `--specs` crash on a non-existent Selenium condition
+
+- `run_specs()` waited for the Product Specifications drawer with
+  `EC.attribute_to_be`, which does not exist in Selenium, so `--specs`
+  raised `AttributeError` at that step. It now waits with a lambda checking
+  `#review-specs-drawer`'s `aria-hidden == "false"`, the condition confirmed
+  working live in 0.6.0.
+- Verified only by `py_compile` here; the equivalent lambda was exercised
+  live in 0.6.0.
+
+## [0.6.2] - `find_chrome_binary()` finds Chrome on macOS
+
+- On macOS, `--engine uc`/`selenium` failed with "Could not find a Chrome
+  or Chromium binary" unless `--chrome-binary` was given, because Chrome is
+  not on `PATH`. `find_chrome_binary()` now also checks
+  `/Applications/Google Chrome.app/...` and `/Applications/Chromium.app/...`.
+- Verified by running `find_chrome_binary()` on the macOS machine used for
+  testing.
+
+## [0.6.3] - `--servicetag` and `--specs` use the direct `servicetag/<tag>` URL
+
+- `run_scrape()` (`--servicetag` with any `--type`) and `run_specs()` now
+  first load `https://www.dell.com/support/product-details/{locale}/servicetag/{tag}/<page>`
+  (new `build_service_tag_url()` / `open_service_tag_page()`) instead of
+  typing the tag into the overview page's lookup widget. If the browser
+  does not stay on that tag's URL (or lands on an "Access Denied" page) it
+  falls back to the old `resolve_service_tag_slug()` path unchanged.
+- Confirmed live through the real CLI, `--engine uc`, fresh automated
+  browser, tag `6JW6H73`, no Akamai challenge and no fallback triggered:
+  `--type drivers --category BIOS` (1 result, the OptiPlex 7080 System
+  BIOS), `--type manuals` (OptiPlex 7080 Micro manuals), and `--specs`
+  (saved `6JW6H73.csv`).
+- Not tested: `--engine selenium`/`firefox` through the CLI, other tags or
+  product lines, the remaining `--type` values (`articles`, `videos`,
+  `advisories`, `regulatory`; the URL is built the same way), or the
+  fallback branch (never triggered). The cache is still keyed on the
+  `--servicetag` label as before.
+
+## [0.6.4] - Wider testing of the direct `servicetag/<tag>` URL: works, then Akamai starts denying it
+
+- Through the CLI, `--servicetag 6JW6H73` on the direct URL, `--engine uc`:
+  `--type regulatory` returned 7 documents, `--type videos` 18, and
+  `--type articles` / `--type advisories` returned 0 (articles also 0 on the
+  old `/product/optiplex-7080-micro/` URL, so that is Dell's data, not the
+  new URL). `--type videos --engine selenium` also returned 18. `--type
+  drivers`/`manuals`/`--specs` were confirmed in 0.6.3.
+- `--engine uc` intermittently crashes with `from unknown error: web view
+  not found`: seen on service-tag videos (2 of 3 runs) and on the old
+  slug URL for advisories (1 run), so it is not caused by the new URL.
+  Cause not investigated. Re-running usually works.
+- **Not reliable:** later in the same session, `--servicetag C2PZXZ3 --type
+  drivers --engine selenium` fell back to the widget (the direct URL
+  returned Akamai's `Access Denied`, "Reference #18") and then failed
+  resolving through the widget as before. A probe showed `Access Denied` on
+  the direct URL for `C2PZXZ3` with both `selenium` and `uc`, and then for
+  `6JW6H73` too (which had worked an hour earlier). The old
+  `/product/optiplex-7080-micro/resources/manuals` URL still loaded 8
+  manuals from the same machine at the same time.
+- Reading: after roughly 20 automated loads in about an hour, Akamai began
+  denying the `servicetag/...` path to this IP/session type while leaving
+  the `/product/<slug>/` pages alone. Whether it is rate-based, temporary,
+  or specific to that path is **unknown**; no retry/backoff was tried. So
+  the direct URL is a likely fast path, not a guaranteed fix.
+- The widget fallback was exercised and behaves as before: a bad tag
+  (`ZZZZZZ9`) and the denied `C2PZXZ3` both fell back and failed after 3
+  attempts with the existing error message.
+- Not testable here: `--engine firefox` (only Firefox Nightly is installed,
+  no `geckodriver`).
+- No code change.

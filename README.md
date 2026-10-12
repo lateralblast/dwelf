@@ -8,7 +8,7 @@ given Dell product, by model name, a direct URL, or a service tag.
 
 ## Version
 
-**0.5.2**, see `CHANGELOG.md` for the complete, versioned history of every
+**0.6.4**, see `CHANGELOG.md` for the complete, versioned history of every
 feature, bug, and thing confirmed (or ruled out) by testing. This section
 is kept in sync with `__version__` in `dwelf.py`; run `python3 dwelf.py
 --version` to confirm what you actually have installed.
@@ -164,6 +164,22 @@ tar xf /tmp/geckodriver.tar.gz -C /tmp && chmod +x /tmp/geckodriver
 Auto-detected if already on `PATH` (and not a snap); otherwise pass
 `--firefox-binary`/`--geckodriver-binary` explicitly.
 
+### `--engine attach` (your own Chrome, unconfirmed)
+
+Drives a Chrome you started yourself instead of launching a fresh automated
+one, in case a real profile gets past Akamai where the other engines don't.
+**Tested once against Dell's site and still blocked** (see `CHANGELOG.md` 0.5.4), so don't expect it to fix `--servicetag`. Start Chrome first, with a
+non-default profile directory (Chrome 136+ ignores the debugging port on the
+default profile):
+
+```bash
+google-chrome --remote-debugging-port=9222 --user-data-dir=$HOME/.dwelf/chrome-profile
+python3 dwelf.py --servicetag 1MJ4LG2 --specs --engine attach
+```
+
+`dwelf.py` opens its own window and closes only that window when done, never
+your browser. Use `--debugger-address` if you chose another port.
+
 ### `--engine uc` (undetected-chromedriver, the default)
 
 Already covered by `requirements.txt` above. Patches the chromedriver
@@ -235,6 +251,7 @@ python3 dwelf.py --model R630 --verbose            # step-by-step progress on st
 python3 dwelf.py --model R630 --debug              # progress plus screenshots/HTML dumped at each step
 python3 dwelf.py --model R630 --engine selenium    # plain Selenium instead of the uc default
 python3 dwelf.py --model R630 --engine firefox     # Firefox instead of Chrome
+python3 dwelf.py --model R630 --engine attach      # your own running Chrome (see below)
 python3 dwelf.py --model R630 --chrome-binary /path/to/chrome
 xvfb-run -a python3 dwelf.py --model R630          # unattended, no display available
 ```
@@ -288,7 +305,8 @@ both, e.g. `~/.dwelf/cache/1MJ4LG2/1MJ4LG2.pdf`, following the same
 | `--no-cache` | off | Always scrape live; don't read or write a cache file. See [Caching](#caching). |
 | `--cache-dir DIR` | `$HOME/.dwelf/cache` | Where cached results are stored, in a subdirectory per `--model`/`--servicetag`. |
 | `--headless` | off | Run the browser headless. **Reliably blocked by Dell**, see below. |
-| `--engine {uc,selenium,firefox}` | `uc` | Browser automation backend. |
+| `--engine {uc,selenium,firefox,attach}` | `uc` | Browser automation backend. `attach` drives an already-running Chrome (see below). |
+| `--debugger-address HOST:PORT` | `127.0.0.1:9222` | Remote debugging address of the Chrome to drive with `--engine attach`. |
 | `--chrome-binary`, `--firefox-binary`, `--geckodriver-binary` | auto-detect | Explicit binary paths if auto-detection fails. |
 | `--verbose` | off | Show `[+]` step-by-step progress on stderr as each stage runs. |
 | `--debug` | off | Everything `--verbose` shows, plus numbered screenshot/HTML dumps saved at each stage. |
